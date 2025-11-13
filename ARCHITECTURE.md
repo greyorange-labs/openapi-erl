@@ -66,7 +66,7 @@ Handler File (trails/0 + types)
 3. Expand `schema => {array, ItemType}` to OpenAPI array schema
 4. Ensure OpenAPI 3.0.x structure compliance
 
-**Input:** Trails with type references (atoms)  
+**Input:** Trails with type references (atoms)
 **Output:** Trails with expanded `$ref` paths
 
 ---
@@ -89,7 +89,7 @@ Handler File (trails/0 + types)
 - **References**: User types → `{$ref: "#/components/schemas/TypeName"}`
 - **Circular**: Handled with `$ref` to break cycles
 
-**Input:** `[type_def()]` (AST)  
+**Input:** `[type_def()]` (AST)
 **Output:** `#{SchemaName => SchemaMap}`
 
 ---
