@@ -28,7 +28,8 @@ parse_file(FilePath) ->
     parse_file(FilePath, []).
 parse_file(FilePath, IncludePaths) ->
     %% Use epp to handle includes and macros
-    case epp:parse_file(FilePath, IncludePaths, []) of
+    Options = [{includes, IncludePaths}],
+    case epp:parse_file(FilePath, Options) of
         {ok, Forms} ->
             Contracts = extract_contracts(Forms),
             Types = extract_types(Forms),

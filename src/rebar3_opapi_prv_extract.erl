@@ -148,7 +148,8 @@ get_include_paths(_State, HandlerPath) ->
 -spec parse_forms(string(), [string()]) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
 parse_forms(FilePath, IncludePaths) ->
     %% Use epp to handle includes and macros
-    case epp:parse_file(FilePath, IncludePaths, []) of
+    Options = [{includes, IncludePaths}],
+    case epp:parse_file(FilePath, Options) of
         {ok, Forms} ->
             {ok, Forms};
         {error, Error} ->
