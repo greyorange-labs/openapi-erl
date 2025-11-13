@@ -99,28 +99,32 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
             case rebar3_opapi_parser:parse_file(HandlerPath) of
                 {ok, {Contracts, Types}} ->
                     %% Also extract routes from the parsed forms
-                    {ok, Forms} = parse_forms(HandlerPath),
-                    Routes = rebar3_opapi_parser:extract_routes(Forms),
-                    rebar_api:info("Found ~p contract(s), ~p type(s), ~p route(s)", 
-                        [length(Contracts), length(Types), length(Routes)]),
-                    
-                    %% Convert contracts and routes to operations
-                    Operations = convert_contracts_to_operations(Contracts, Routes, Types),
-                    
-                    %% Build OpenAPI document
-                    AppNameBin = case AppNameOpt of
-                        undefined -> <<"API">>;
-                        AppNameStr -> list_to_binary(AppNameStr)
-                    end,
-                    OpenAPIDoc = rebar3_opapi_builder:build(Operations, AppNameBin),
-                    
-                    %% Write to file
-                    case write_openapi_file(OutputPath, OpenAPIDoc) of
-                        ok ->
-                            rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
-                            {ok, State};
+                    case parse_forms(HandlerPath) of
+                        {ok, Forms} ->
+                            Routes = rebar3_opapi_parser:extract_routes(Forms),
+                            rebar_api:info("Found ~p contract(s), ~p type(s), ~p route(s)", 
+                                [length(Contracts), length(Types), length(Routes)]),
+                            
+                            %% Convert contracts and routes to operations
+                            Operations = convert_contracts_to_operations(Contracts, Routes, Types),
+                            
+                            %% Build OpenAPI document
+                            AppNameBin = case AppNameOpt of
+                                undefined -> <<"API">>;
+                                AppNameStr -> list_to_binary(AppNameStr)
+                            end,
+                            OpenAPIDoc = rebar3_opapi_builder:build(Operations, AppNameBin),
+                            
+                            %% Write to file
+                            case write_openapi_file(OutputPath, OpenAPIDoc) of
+                                ok ->
+                                    rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
+                                    {ok, State};
+                                {error, Reason} ->
+                                    {error, {file_write_error, OutputPath, Reason}}
+                            end;
                         {error, Reason} ->
-                            {error, {file_write_error, OutputPath, Reason}}
+                            {error, {parse_error, Reason}}
                     end;
                 {error, Reason} ->
                     {error, {parse_error, Reason}}
