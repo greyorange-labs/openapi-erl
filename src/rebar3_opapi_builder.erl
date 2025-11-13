@@ -28,7 +28,8 @@ build_from_trails(Trails, Types, AppName) ->
         <<"info">> => build_info(AppName),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths_from_trails(Trails),
-        <<"components">> => build_components(Types)
+        <<"components">> => build_components(Types),
+        <<"security">> => []  % Empty array indicates no security required (satisfies security-defined rule)
     }.
 
 %% @doc Build OpenAPI document from operations (legacy approach)

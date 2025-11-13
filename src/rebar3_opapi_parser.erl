@@ -70,6 +70,9 @@ extract_value({nil, _Line}) ->
     [];
 extract_value({cons, _Line, Head, Tail}) ->
     [extract_value(Head) | extract_value(Tail)];
+extract_value({tuple, _Line, Elements}) ->
+    %% Tuple literal like {array, user}
+    list_to_tuple([extract_value(Elem) || Elem <- Elements]);
 extract_value({map, _Line1, Fields}) ->
     maps:from_list(
         lists:map(

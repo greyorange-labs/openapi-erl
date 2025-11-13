@@ -156,10 +156,27 @@ expand_parameters(Parameters, Types) ->
 
 %% @doc Expand a single parameter
 -spec expand_parameter(map(), [type_def()]) -> map().
-expand_parameter(#{schema := TypeRef} = Param, _Types) when is_atom(TypeRef) ->
-    %% Type reference found - expand to $ref
-    SchemaRef = type_ref_to_schema_ref(TypeRef),
-    Param#{schema => #{<<"$ref">> => SchemaRef}};
+expand_parameter(#{schema := TypeRef} = Param, Types) when is_atom(TypeRef) ->
+    %% Check if it's a primitive type or a user-defined type
+    case is_primitive_type(TypeRef) of
+        true ->
+            %% Convert primitive type to inline schema
+            InlineSchema = primitive_type_to_schema(TypeRef),
+            Param#{schema => InlineSchema};
+        false ->
+            %% Check if it's a defined type in Types
+            case lists:keyfind(TypeRef, 1, Types) of
+                {TypeRef, _TypeDef} ->
+                    %% User-defined type - expand to $ref
+                    SchemaRef = type_ref_to_schema_ref(TypeRef),
+                    Param#{schema => #{<<"$ref">> => SchemaRef}};
+                false ->
+                    %% Unknown type - assume it's a user-defined type and create $ref
+                    %% (will fail validation if type doesn't exist, but that's expected)
+                    SchemaRef = type_ref_to_schema_ref(TypeRef),
+                    Param#{schema => #{<<"$ref">> => SchemaRef}}
+            end
+    end;
 expand_parameter(Param, _Types) ->
     %% No type reference or already expanded
     Param.
@@ -202,17 +219,49 @@ expand_response(Response, _Types) ->
 
 %% @doc Expand schema in media type object
 -spec expand_media_type_schema(map(), [type_def()]) -> map().
-expand_media_type_schema(#{schema := {array, ItemType}} = MediaTypeMeta, _Types) when is_atom(ItemType) ->
+expand_media_type_schema(#{schema := {array, ItemType}} = MediaTypeMeta, Types) when is_atom(ItemType) ->
     %% Array type reference - expand to OpenAPI array schema
-    ItemRef = type_ref_to_schema_ref(ItemType),
+    ItemsSchema = case is_primitive_type(ItemType) of
+        true ->
+            %% Primitive type - use inline schema
+            primitive_type_to_schema(ItemType);
+        false ->
+            %% Check if it's a defined type in Types
+            case lists:keyfind(ItemType, 1, Types) of
+                {ItemType, _TypeDef} ->
+                    %% User-defined type - use $ref
+                    ItemRef = type_ref_to_schema_ref(ItemType),
+                    #{<<"$ref">> => ItemRef};
+                false ->
+                    %% Unknown type - assume it's a user-defined type and create $ref
+                    ItemRef = type_ref_to_schema_ref(ItemType),
+                    #{<<"$ref">> => ItemRef}
+            end
+    end,
     MediaTypeMeta#{schema => #{
         <<"type">> => <<"array">>,
-        <<"items">> => #{<<"$ref">> => ItemRef}
+        <<"items">> => ItemsSchema
     }};
-expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, _Types) when is_atom(TypeRef) ->
-    %% Type reference found - expand to $ref
-    SchemaRef = type_ref_to_schema_ref(TypeRef),
-    MediaTypeMeta#{schema => #{<<"$ref">> => SchemaRef}};
+expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, Types) when is_atom(TypeRef) ->
+    %% Check if it's a primitive type or a user-defined type
+    case is_primitive_type(TypeRef) of
+        true ->
+            %% Convert primitive type to inline schema
+            InlineSchema = primitive_type_to_schema(TypeRef),
+            MediaTypeMeta#{schema => InlineSchema};
+        false ->
+            %% Check if it's a defined type in Types
+            case lists:keyfind(TypeRef, 1, Types) of
+                {TypeRef, _TypeDef} ->
+                    %% User-defined type - expand to $ref
+                    SchemaRef = type_ref_to_schema_ref(TypeRef),
+                    MediaTypeMeta#{schema => #{<<"$ref">> => SchemaRef}};
+                false ->
+                    %% Unknown type - assume it's a user-defined type and create $ref
+                    SchemaRef = type_ref_to_schema_ref(TypeRef),
+                    MediaTypeMeta#{schema => #{<<"$ref">> => SchemaRef}}
+            end
+    end;
 expand_media_type_schema(MediaTypeMeta, _Types) ->
     MediaTypeMeta.
 
@@ -222,4 +271,30 @@ type_ref_to_schema_ref(TypeName) ->
     %% Capitalize type name (user_id -> UserId)
     CapitalizedName = rebar3_opapi_schema_converter:capitalize_type_name(TypeName),
     <<"#/components/schemas/", CapitalizedName/binary>>.
+
+%% @doc Check if an atom is a primitive Erlang type
+-spec is_primitive_type(atom()) -> boolean().
+is_primitive_type(binary) -> true;
+is_primitive_type(integer) -> true;
+is_primitive_type(float) -> true;
+is_primitive_type(boolean) -> true;
+is_primitive_type(Binary) when Binary =:= <<"binary">> -> true;
+is_primitive_type(Integer) when Integer =:= <<"integer">> -> true;
+is_primitive_type(Float) when Float =:= <<"float">> -> true;
+is_primitive_type(Boolean) when Boolean =:= <<"boolean">> -> true;
+is_primitive_type(_) -> false.
+
+%% @doc Convert primitive type atom to OpenAPI inline schema
+-spec primitive_type_to_schema(atom()) -> map().
+primitive_type_to_schema(binary) ->
+    #{<<"type">> => <<"string">>};
+primitive_type_to_schema(integer) ->
+    #{<<"type">> => <<"integer">>};
+primitive_type_to_schema(float) ->
+    #{<<"type">> => <<"number">>};
+primitive_type_to_schema(boolean) ->
+    #{<<"type">> => <<"boolean">>};
+primitive_type_to_schema(_) ->
+    %% Fallback for unknown primitive types
+    #{<<"type">> => <<"string">>}.
 

@@ -1,7 +1,7 @@
 -module(rebar3_opapi_prv_extract).
 -behaviour(provider).
 
--export([init/1, do/1, format_error/1]).
+-export([init/1, do/1, format_error/1, write_openapi_file/2]).
 
 
 -define(PROVIDER, extract).
@@ -178,20 +178,114 @@ write_openapi_file(OutputPath, OpenAPIDoc) ->
 -spec write_yaml_file(string(), map()) -> ok | {error, term()}.
 write_yaml_file(FilePath, Doc) ->
     try
-        %% Use simple YAML writer (yamerl doesn't have encoder)
-        YAML = rebar3_opapi_yaml_writer:write(Doc),
-        file:write_file(FilePath, YAML)
+        %% Generate JSON first, then convert to YAML using CLI tool
+        %% This avoids YAML quoting and formatting issues
+        %% Convert map to ordered proplist to preserve field order
+        OrderedDoc = map_to_ordered_proplist(Doc),
+        JSON = jsx:encode(OrderedDoc),
+
+        %% Write JSON to temporary file
+        TmpJSONFile = FilePath ++ ".tmp.json",
+        case file:write_file(TmpJSONFile, JSON) of
+            ok ->
+                %% Convert JSON to YAML using yq or jq
+                case convert_json_to_yaml(TmpJSONFile, FilePath) of
+                    ok ->
+                        %% Clean up temp file
+                        file:delete(TmpJSONFile),
+                        ok;
+                    {error, ConvReason} ->
+                        %% Clean up temp file
+                        file:delete(TmpJSONFile),
+                        {error, {conversion_error, ConvReason}}
+                end;
+            {error, WriteReason} ->
+                {error, {file_write_error, TmpJSONFile, WriteReason}}
+        end
     catch
-        Class:Reason ->
-            {error, {Class, Reason}}
+        Class:ErrReason ->
+            {error, {Class, ErrReason}}
+    end.
+
+-spec convert_json_to_yaml(string(), string()) -> ok | {error, string()}.
+convert_json_to_yaml(JSONFile, YAMLFile) ->
+    %% Try yq first (better YAML output), then jq as fallback
+    case os:find_executable("yq") of
+        YqPath when YqPath =/= false ->
+            %% Use yq v4: yq -o yaml . json_file > yaml_file
+            %% For yq v4, use -o yaml flag for YAML output
+            Cmd = io_lib:format("~s -o yaml . ~s > ~s 2>&1", [YqPath, JSONFile, YAMLFile]),
+            Output = os:cmd(lists:flatten(Cmd)),
+            case filelib:is_file(YAMLFile) of
+                true ->
+                    ok;
+                false ->
+                    {error, lists:flatten(io_lib:format("yq failed: ~s", [Output]))}
+            end;
+        false ->
+            {error, "yq not found - please install yq for JSON to YAML conversion"}
     end.
 
 -spec write_json_file(string(), map()) -> ok | {error, term()}.
 write_json_file(FilePath, Doc) ->
     try
-        JSON = jsx:encode(Doc, [pretty]),
+        %% Convert map to ordered proplist to preserve field order
+        OrderedDoc = map_to_ordered_proplist(Doc),
+        JSON = jsx:encode(OrderedDoc),
         file:write_file(FilePath, JSON)
     catch
-        Class:Reason ->
-            {error, {Class, Reason}}
+        Class:ErrReason ->
+            {error, {Class, ErrReason}}
     end.
+
+%% @doc Convert OpenAPI document map to ordered proplist for JSON encoding
+%% OpenAPI 3.0.3 spec requires: openapi, info, servers, paths, components
+-spec map_to_ordered_proplist(map()) -> [{binary(), term()}].
+map_to_ordered_proplist(Doc) ->
+    %% Define the required field order for OpenAPI 3.0.3
+    OrderedKeys = [
+        <<"openapi">>,
+        <<"info">>,
+        <<"servers">>,
+        <<"paths">>,
+        <<"components">>,
+        <<"security">>
+    ],
+    %% Build proplist in order, then add any remaining keys
+    %% Fold over reversed keys to build list in correct order (no need to reverse result)
+    OrderedPairs = lists:foldl(
+        fun(Key, Acc) ->
+            case maps:get(Key, Doc, undefined) of
+                undefined -> Acc;
+                Value -> [{Key, convert_value_to_proplist(Value)} | Acc]
+            end
+        end,
+        [],
+        lists:reverse(OrderedKeys)
+    ),
+    %% Add any remaining keys not in the ordered list
+    AllKeys = maps:keys(Doc),
+    RemainingKeys = lists:filter(
+        fun(K) -> not lists:member(K, OrderedKeys) end,
+        AllKeys
+    ),
+    RemainingPairs = lists:map(
+        fun(Key) ->
+            Value = maps:get(Key, Doc),
+            {Key, convert_value_to_proplist(Value)}
+        end,
+        RemainingKeys
+    ),
+    %% OrderedPairs is already in correct order (openapi first), don't reverse it
+    OrderedPairs ++ RemainingPairs.
+
+%% @doc Recursively convert map values to proplists to preserve order
+-spec convert_value_to_proplist(term()) -> term().
+convert_value_to_proplist(Map) when is_map(Map) ->
+    %% For nested maps, convert to proplist but don't enforce specific order
+    %% (only top-level OpenAPI fields need ordering)
+    maps:to_list(Map);
+convert_value_to_proplist(List) when is_list(List) ->
+    lists:map(fun convert_value_to_proplist/1, List);
+convert_value_to_proplist(Value) ->
+    Value.
