@@ -147,7 +147,7 @@ parse_forms(FilePath) ->
             {error, {file_read_error, FilePath, Reason}}
     end.
 
--spec convert_contracts_to_operations([contract()], [route()], [type_def()]) -> [map()].
+-spec convert_contracts_to_operations([rebar3_opapi_parser:contract()], [rebar3_opapi_parser:route()], [rebar3_opapi_parser:type_def()]) -> [map()].
 convert_contracts_to_operations(Contracts, Routes, _Types) ->
     %% Match contracts with routes by operation_id
     ContractMap = maps:from_list(Contracts),
