@@ -186,7 +186,7 @@ build_complete_openapi_doc_test() ->
     AppName = <<"TestAPI">>,
 
     %% Execute
-    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, undefined),
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, undefined, undefined),
 
     %% Assert: Check top-level structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),
@@ -238,7 +238,7 @@ build_info_from_app_src_test() ->
 
     %% Execute: Build info with app.src path
     AppName = <<"test_app">>,
-    Info = rebar3_openapi_builder:build_info(AppName, TestAppSrcPath),
+    Info = rebar3_openapi_builder:build_info(AppName, TestAppSrcPath, undefined),
 
     %% Assert: Should extract version and description from app.src
     ?assertEqual(<<"test_app">>, maps:get(<<"title">>, Info)),
@@ -249,7 +249,7 @@ build_info_from_app_src_test() ->
 build_info_without_app_src_test() ->
     %% Execute: Build info without app.src path
     AppName = <<"TestAPI">>,
-    Info = rebar3_openapi_builder:build_info(AppName, undefined),
+    Info = rebar3_openapi_builder:build_info(AppName, undefined, undefined),
 
     %% Assert: Should use default values
     ?assertEqual(<<"TestAPI">>, maps:get(<<"title">>, Info)),
@@ -281,7 +281,7 @@ build_complete_doc_with_app_src_test() ->
     TestAppSrcPath = "test/fixtures/test_app.app.src",
 
     %% Execute
-    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, TestAppSrcPath),
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, TestAppSrcPath, undefined),
 
     %% Assert: Check info section has values from app.src
     Info = maps:get(<<"info">>, Doc),

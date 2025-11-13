@@ -123,16 +123,13 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 
                     %% Find app.src file
                     AppSrcPath = find_app_src(HandlerPath, AppName),
-                    case AppSrcPath of
-                        undefined ->
-                            rebar_api:warn("App.src file not found for app ~s", [AppName]);
-                        Path ->
-                            rebar_api:info("Using app.src: ~s", [Path])
-                    end,
-
+                    
+                    %% Get workspace root (project root directory)
+                    WorkspaceRoot = rebar_dir:root_dir(State),
+                    
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = list_to_binary(AppName),
-                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath),
+                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot),
 
                     %% Write to file
                     case write_openapi_file(OutputPath, OpenAPIDoc) of
@@ -150,10 +147,15 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 -spec find_app_src(string(), string()) -> string() | undefined.
 find_app_src(HandlerPath, AppName) ->
     %% Get app root directory
-    %% HandlerPath: apps/butler_shared/src/interfaces/in/file.erl
+    %% HandlerPath: apps/butler_shared/src/interfaces/in/file.erl (may be relative)
     %% We need: apps/butler_shared
     %% Strategy: Find the directory that contains "src" subdirectory
-    HandlerDir = filename:dirname(HandlerPath),
+    %% Make path absolute first
+    AbsHandlerPath = case filelib:is_file(HandlerPath) of
+        true -> filename:absname(HandlerPath);
+        false -> HandlerPath  % Keep as-is if file doesn't exist (shouldn't happen)
+    end,
+    HandlerDir = filename:dirname(AbsHandlerPath),
     AppRoot = find_app_root(HandlerDir),
 
     %% Try src/<app_name>.app.src first (most common location)

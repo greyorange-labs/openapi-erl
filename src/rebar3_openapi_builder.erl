@@ -12,9 +12,10 @@
 -export([
     build/3,
     build_from_trails/4,
+    build_from_trails/5,
     build_paths_from_trails/1,
     build_components/1,
-    build_info/2
+    build_info/3
 ]).
 
 %%%===================================================================
@@ -25,9 +26,13 @@
 -spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) ->
     map().
 build_from_trails(Trails, Types, AppName, AppSrcPath) ->
+    build_from_trails(Trails, Types, AppName, AppSrcPath, undefined).
+
+-spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined, WorkspaceRoot :: string() | undefined) -> map().
+build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
-        <<"info">> => build_info(AppName, AppSrcPath),
+        <<"info">> => build_info(AppName, AppSrcPath, WorkspaceRoot),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths_from_trails(Trails),
         <<"components">> => build_components(Types),
@@ -40,7 +45,7 @@ build_from_trails(Trails, Types, AppName, AppSrcPath) ->
 build(Operations, Types, AppName) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
-        <<"info">> => build_info(AppName, undefined),
+        <<"info">> => build_info(AppName, undefined, undefined),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths(Operations),
         <<"components">> => build_components(Types)
@@ -50,30 +55,30 @@ build(Operations, Types, AppName) ->
 %%% Internal Functions
 %%%===================================================================
 
--spec build_info(atom() | binary(), string() | undefined) -> map().
-build_info(AppName, AppSrcPath) when is_atom(AppName) ->
+-spec build_info(atom() | binary(), string() | undefined, string() | undefined) -> map().
+build_info(AppName, AppSrcPath, WorkspaceRoot) when is_atom(AppName) ->
     AppNameBin = atom_to_binary(AppName),
-    {Version, Description} = read_app_src_info(AppSrcPath),
+    {Version, Description} = read_app_src_info(AppSrcPath, WorkspaceRoot),
     #{
         <<"title">> => AppNameBin,
         <<"version">> => Version,
         <<"description">> => Description
     };
-build_info(AppName, AppSrcPath) when is_binary(AppName) ->
-    {Version, Description} = read_app_src_info(AppSrcPath),
+build_info(AppName, AppSrcPath, WorkspaceRoot) when is_binary(AppName) ->
+    {Version, Description} = read_app_src_info(AppSrcPath, WorkspaceRoot),
     #{
         <<"title">> => AppName,
         <<"version">> => Version,
         <<"description">> => Description
     }.
 
--spec read_app_src_info(string() | undefined) -> {binary(), binary()}.
-read_app_src_info(undefined) ->
+-spec read_app_src_info(string() | undefined, string() | undefined) -> {binary(), binary()}.
+read_app_src_info(undefined, _WorkspaceRoot) ->
     {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>};
-read_app_src_info(AppSrcPath) ->
+read_app_src_info(AppSrcPath, WorkspaceRoot) ->
     case file:consult(AppSrcPath) of
         {ok, [Term]} ->
-            case extract_app_info(Term) of
+            case extract_app_info(Term, AppSrcPath, WorkspaceRoot) of
                 {ok, Version, Description} ->
                     {Version, Description};
                 error ->
@@ -83,23 +88,23 @@ read_app_src_info(AppSrcPath) ->
             {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>}
     end.
 
--spec extract_app_info(term()) -> {ok, binary(), binary()} | error.
-extract_app_info({application, _AppName, AppList}) when is_list(AppList) ->
+-spec extract_app_info(term(), string(), string() | undefined) -> {ok, binary(), binary()} | error.
+extract_app_info({application, _AppName, AppList}, AppSrcPath, WorkspaceRoot) when is_list(AppList) ->
     %% Extract version and description from application list
-    Version = extract_version_from_list(AppList),
+    Version = extract_version_from_list(AppList, AppSrcPath, WorkspaceRoot),
     Description = extract_description_from_list(AppList),
     {ok, Version, Description};
-extract_app_info(_) ->
+extract_app_info(_, _, _) ->
     error.
 
--spec extract_version_from_list([term()]) -> binary().
-extract_version_from_list([]) ->
+-spec extract_version_from_list([term()], string(), string() | undefined) -> binary().
+extract_version_from_list([], _AppSrcPath, _WorkspaceRoot) ->
     <<"1.0.0">>;
-extract_version_from_list([{vsn, Version} | _Rest]) ->
+extract_version_from_list([{vsn, Version} | _Rest], AppSrcPath, WorkspaceRoot) ->
     case Version of
-        {cmd, _Cmd} ->
-            %% Version is from command, use default
-            <<"1.0.0">>;
+        {cmd, Cmd} when is_list(Cmd) ->
+            %% Version is from command, execute it
+            execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot);
         VersionStr when is_list(VersionStr) ->
             list_to_binary(VersionStr);
         VersionBin when is_binary(VersionBin) ->
@@ -107,8 +112,42 @@ extract_version_from_list([{vsn, Version} | _Rest]) ->
         _ ->
             <<"1.0.0">>
     end;
-extract_version_from_list([_ | Rest]) ->
-    extract_version_from_list(Rest).
+extract_version_from_list([_ | Rest], AppSrcPath, WorkspaceRoot) ->
+    extract_version_from_list(Rest, AppSrcPath, WorkspaceRoot).
+
+-spec execute_version_cmd(string(), string(), string() | undefined) -> binary().
+execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot) ->
+    %% Resolve command path relative to app.src file location
+    AppSrcDir = filename:dirname(AppSrcPath),
+    CmdPath = filename:absname(Cmd, AppSrcDir),
+    
+    %% If workspace root is provided and command path is relative, try resolving from workspace root
+    FinalCmdPath = case WorkspaceRoot of
+        undefined ->
+            CmdPath;
+        Root when is_list(Root) ->
+            %% Try workspace root first, then fallback to app.src relative
+            WorkspaceCmdPath = filename:absname(Cmd, Root),
+            case filelib:is_file(WorkspaceCmdPath) of
+                true -> WorkspaceCmdPath;
+                false -> CmdPath
+            end
+    end,
+    
+    %% Execute the command
+    case filelib:is_file(FinalCmdPath) of
+        true ->
+            case os:cmd(FinalCmdPath) of
+                [] ->
+                    <<"1.0.0">>;
+                Output ->
+                    %% Trim whitespace and newlines
+                    Trimmed = string:trim(Output, both, "\n\r\t "),
+                    list_to_binary(Trimmed)
+            end;
+        false ->
+            <<"1.0.0">>
+    end.
 
 -spec extract_description_from_list([term()]) -> binary().
 extract_description_from_list([]) ->
