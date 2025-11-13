@@ -129,7 +129,7 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
                         Path ->
                             rebar_api:info("Using app.src: ~s", [Path])
                     end,
-                    
+
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = list_to_binary(AppName),
                     OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath),
