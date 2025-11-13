@@ -88,7 +88,10 @@ build_paths(Operations) ->
             end,
 
             %% Group by path
-            PathBin = list_to_binary(Path),
+            PathBin = case is_binary(Path) of
+                true -> Path;
+                false -> list_to_binary(Path)
+            end,
             MethodBin = method_to_lowercase(Method),
             ExistingPath = maps:get(PathBin, Acc, #{}),
             Acc#{PathBin => ExistingPath#{MethodBin => OpObj3}}
