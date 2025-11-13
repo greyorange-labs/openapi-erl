@@ -123,7 +123,13 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 
                     %% Find app.src file
                     AppSrcPath = find_app_src(HandlerPath, AppName),
-
+                    case AppSrcPath of
+                        undefined ->
+                            rebar_api:warn("App.src file not found for app ~s", [AppName]);
+                        Path ->
+                            rebar_api:info("Using app.src: ~s", [Path])
+                    end,
+                    
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = list_to_binary(AppName),
                     OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath),
@@ -149,7 +155,7 @@ find_app_src(HandlerPath, AppName) ->
     %% Strategy: Find the directory that contains "src" subdirectory
     HandlerDir = filename:dirname(HandlerPath),
     AppRoot = find_app_root(HandlerDir),
-    
+
     %% Try src/<app_name>.app.src first (most common location)
     AppSrcPath1 = filename:join([AppRoot, "src", AppName ++ ".app.src"]),
     case filelib:is_file(AppSrcPath1) of
