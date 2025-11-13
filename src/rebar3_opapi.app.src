@@ -1,0 +1,11 @@
+{application, rebar3_opapi,
+ [{description, "Rebar3 plugin for extracting OpenAPI 3.0.x documentation from Erlang handler modules"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {modules, []},
+  {licenses, []},
+  {links, []}
+ ]}.
+
