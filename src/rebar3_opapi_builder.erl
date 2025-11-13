@@ -15,7 +15,7 @@
 %%% Public API
 %%%===================================================================
 
--spec build([operation()], AppName :: atom()) -> map().
+-spec build([operation()], AppName :: atom() | binary()) -> map().
 build(Operations, AppName) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
@@ -29,10 +29,16 @@ build(Operations, AppName) ->
 %%% Internal Functions
 %%%===================================================================
 
--spec build_info(atom()) -> map().
-build_info(AppName) ->
+-spec build_info(atom() | binary()) -> map().
+build_info(AppName) when is_atom(AppName) ->
     #{
         <<"title">> => atom_to_binary(AppName),
+        <<"version">> => <<"1.0.0">>,
+        <<"description">> => <<"API documentation generated from Erlang handler modules">>
+    };
+build_info(AppName) when is_binary(AppName) ->
+    #{
+        <<"title">> => AppName,
         <<"version">> => <<"1.0.0">>,
         <<"description">> => <<"API documentation generated from Erlang handler modules">>
     }.
@@ -91,7 +97,7 @@ build_paths(Operations) ->
         Operations
     ).
 
--spec build_components([operation()], atom()) -> map().
+-spec build_components([operation()], atom() | binary()) -> map().
 build_components(Operations, AppName) ->
     %% Extract all schemas from operations
     Schemas = extract_schemas(Operations, AppName),
@@ -99,7 +105,7 @@ build_components(Operations, AppName) ->
         <<"schemas">> => Schemas
     }.
 
--spec extract_schemas([operation()], atom()) -> map().
+-spec extract_schemas([operation()], atom() | binary()) -> map().
 extract_schemas(_Operations, _AppName) ->
     %% For now, return empty schemas
     %% Schemas will be extracted from type definitions in future enhancement
