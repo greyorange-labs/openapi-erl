@@ -11,7 +11,7 @@
 
 -export([
     build/3,
-    build_from_trails/3,
+    build_from_trails/4,
     build_paths_from_trails/1,
     build_components/1
 ]).
@@ -21,11 +21,11 @@
 %%%===================================================================
 
 %% @doc Build OpenAPI document from expanded trails (new approach)
--spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary()) -> map().
-build_from_trails(Trails, Types, AppName) ->
+-spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) -> map().
+build_from_trails(Trails, Types, AppName, AppSrcPath) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
-        <<"info">> => build_info(AppName),
+        <<"info">> => build_info(AppName, AppSrcPath),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths_from_trails(Trails),
         <<"components">> => build_components(Types),
@@ -37,7 +37,7 @@ build_from_trails(Trails, Types, AppName) ->
 build(Operations, Types, AppName) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
-        <<"info">> => build_info(AppName),
+        <<"info">> => build_info(AppName, undefined),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths(Operations),
         <<"components">> => build_components(Types)
@@ -47,19 +47,106 @@ build(Operations, Types, AppName) ->
 %%% Internal Functions
 %%%===================================================================
 
--spec build_info(atom() | binary()) -> map().
-build_info(AppName) when is_atom(AppName) ->
+-spec build_info(atom() | binary(), string() | undefined) -> map().
+build_info(AppName, AppSrcPath) when is_atom(AppName) ->
+    AppNameBin = atom_to_binary(AppName),
+    {Version, Description} = read_app_src_info(AppSrcPath),
     #{
-        <<"title">> => atom_to_binary(AppName),
-        <<"version">> => <<"1.0.0">>,
-        <<"description">> => <<"API documentation generated from Erlang handler modules">>
+        <<"title">> => AppNameBin,
+        <<"version">> => Version,
+        <<"description">> => Description
     };
-build_info(AppName) when is_binary(AppName) ->
+build_info(AppName, AppSrcPath) when is_binary(AppName) ->
+    {Version, Description} = read_app_src_info(AppSrcPath),
     #{
         <<"title">> => AppName,
-        <<"version">> => <<"1.0.0">>,
-        <<"description">> => <<"API documentation generated from Erlang handler modules">>
+        <<"version">> => Version,
+        <<"description">> => Description
     }.
+
+-spec read_app_src_info(string() | undefined) -> {binary(), binary()}.
+read_app_src_info(undefined) ->
+    {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>};
+read_app_src_info(AppSrcPath) ->
+    case file:read_file(AppSrcPath) of
+        {ok, Content} ->
+            case parse_app_src(Content) of
+                {ok, Version, Description} ->
+                    {Version, Description};
+                {error, _Reason} ->
+                    {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>}
+            end;
+        {error, _Reason} ->
+            {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>}
+    end.
+
+-spec parse_app_src(binary()) -> {ok, binary(), binary()} | {error, term()}.
+parse_app_src(Content) ->
+    try
+        %% Parse Erlang term from file content
+        %% file:consult expects a file path, so we'll parse manually
+        case erl_scan:string(binary_to_list(Content)) of
+            {ok, Tokens, _} ->
+                case erl_parse:parse_term(Tokens) of
+                    {ok, Term} ->
+                        case extract_app_info(Term) of
+                            {ok, Version, Description} ->
+                                {ok, Version, Description};
+                            error ->
+                                {error, not_found}
+                        end;
+                    {error, _} ->
+                        {error, parse_error}
+                end;
+            {error, _, _} ->
+                {error, scan_error}
+        end
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+-spec extract_app_info(term()) -> {ok, binary(), binary()} | error.
+extract_app_info({application, _AppName, AppList}) when is_list(AppList) ->
+    %% Extract version and description from application list
+    Version = extract_version_from_list(AppList),
+    Description = extract_description_from_list(AppList),
+    {ok, Version, Description};
+extract_app_info(_) ->
+    error.
+
+-spec extract_version_from_list([term()]) -> binary().
+extract_version_from_list([]) ->
+    <<"1.0.0">>;
+extract_version_from_list([{vsn, Version} | _Rest]) ->
+    case Version of
+        {cmd, _Cmd} ->
+            %% Version is from command, use default
+            <<"1.0.0">>;
+        VersionStr when is_list(VersionStr) ->
+            list_to_binary(VersionStr);
+        VersionBin when is_binary(VersionBin) ->
+            VersionBin;
+        _ ->
+            <<"1.0.0">>
+    end;
+extract_version_from_list([_ | Rest]) ->
+    extract_version_from_list(Rest).
+
+-spec extract_description_from_list([term()]) -> binary().
+extract_description_from_list([]) ->
+    <<"API documentation generated from Erlang handler modules">>;
+extract_description_from_list([{description, Desc} | _Rest]) ->
+    case Desc of
+        DescStr when is_list(DescStr) ->
+            list_to_binary(DescStr);
+        DescBin when is_binary(DescBin) ->
+            DescBin;
+        _ ->
+            <<"API documentation generated from Erlang handler modules">>
+    end;
+extract_description_from_list([_ | Rest]) ->
+    extract_description_from_list(Rest).
 
 -spec build_servers() -> [map()].
 build_servers() ->

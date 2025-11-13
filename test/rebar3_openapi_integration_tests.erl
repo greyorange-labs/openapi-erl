@@ -50,7 +50,7 @@ simple_handler_end_to_end_test() ->
 
     %% Step 4: Build OpenAPI document
     AppName = <<"TestAPI">>,
-    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName),
+    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName, undefined),
 
     %% Assert: Check top-level structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, OpenAPIDoc)),
@@ -97,7 +97,7 @@ comprehensive_handler_end_to_end_test() ->
 
     %% Step 4: Build OpenAPI document
     AppName = <<"ComprehensiveAPI">>,
-    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName),
+    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName, undefined),
 
     %% Assert: Check top-level structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, OpenAPIDoc)),
@@ -196,7 +196,7 @@ generate_complete_openapi_doc_test() ->
 
     %% Generate OpenAPI document
     AppName = <<"TestAPI">>,
-    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName),
+    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName, undefined),
 
     %% Verify complete document structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, OpenAPIDoc)),
@@ -370,7 +370,7 @@ validate_openapi_standard_test() ->
 
     %% Generate OpenAPI document
     AppName = <<"TestAPI">>,
-    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName),
+    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppName, undefined),
 
     %% Verify basic structure before writing
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, OpenAPIDoc)),

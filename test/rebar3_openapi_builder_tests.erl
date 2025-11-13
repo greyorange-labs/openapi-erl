@@ -186,7 +186,7 @@ build_complete_openapi_doc_test() ->
     AppName = <<"TestAPI">>,
 
     %% Execute
-    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName),
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, undefined),
 
     %% Assert: Check top-level structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),

@@ -25,7 +25,7 @@ init(State) ->
         {opts, [
             {handler, undefined, "handler", string, "Path to handler .erl file (required)"},
             {output, undefined, "output", string, "Output file path (required)"},
-            {app, undefined, "app", string, "Application name (optional, for metadata)"}
+            {app, undefined, "app", string, "Application name (required, for metadata)"}
         ]}
     ]),
     {ok, rebar_state:add_provider(State, Provider)}.
@@ -39,7 +39,7 @@ do(State) ->
         OutputPath = proplists:get_value(output, Args),
         AppName = proplists:get_value(app, Args),
 
-        case validate_args(HandlerPath, OutputPath) of
+        case validate_args(HandlerPath, OutputPath, AppName) of
             ok ->
                 extract_and_generate(State, HandlerPath, OutputPath, AppName);
             {error, Reason} ->
@@ -57,6 +57,8 @@ format_error({missing_arg, handler}) ->
     "Missing required argument: --handler <path-to-handler-erl>";
 format_error({missing_arg, output}) ->
     "Missing required argument: --output <output-file-path>";
+format_error({missing_arg, app}) ->
+    "Missing required argument: --app <application-name>";
 format_error({file_write_error, Path, Reason}) ->
     io_lib:format("Failed to write file ~s: ~p", [Path, Reason]);
 format_error({file_not_found, Path}) ->
@@ -74,24 +76,23 @@ format_error(Reason) ->
 %%% Internal Functions
 %%%===================================================================
 
--spec validate_args(term(), term()) -> ok | {error, term()}.
-validate_args(undefined, _) ->
+-spec validate_args(term(), term(), term()) -> ok | {error, term()}.
+validate_args(undefined, _, _) ->
     {error, {missing_arg, handler}};
-validate_args(_, undefined) ->
+validate_args(_, undefined, _) ->
     {error, {missing_arg, output}};
-validate_args(_, _) ->
+validate_args(_, _, undefined) ->
+    {error, {missing_arg, app}};
+validate_args(_, _, _) ->
     ok.
 
--spec extract_and_generate(rebar_state:t(), string(), string(), string() | undefined) ->
+-spec extract_and_generate(rebar_state:t(), string(), string(), string()) ->
     {ok, rebar_state:t()} | {error, string()}.
-extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
+extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
     rebar_api:info("Extracting OpenAPI documentation...", []),
     rebar_api:info("  Handler: ~s", [HandlerPath]),
     rebar_api:info("  Output: ~s", [OutputPath]),
-    case AppNameOpt of
-        undefined -> ok;
-        AppName -> rebar_api:info("  App: ~s", [AppName])
-    end,
+    rebar_api:info("  App: ~s", [AppName]),
 
     %% Validate handler file exists
     case filelib:is_file(HandlerPath) of
@@ -120,12 +121,12 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
                     %% Expand trails metadata (type refs -> $refs)
                     ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
 
+                    %% Find app.src file
+                    AppSrcPath = find_app_src(HandlerPath, AppName),
+                    
                     %% Build OpenAPI document from expanded trails
-                    AppNameBin = case AppNameOpt of
-                        undefined -> <<"API">>;
-                        AppNameStr -> list_to_binary(AppNameStr)
-                    end,
-                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin),
+                    AppNameBin = list_to_binary(AppName),
+                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath),
 
                     %% Write to file
                     case write_openapi_file(OutputPath, OpenAPIDoc) of
@@ -137,6 +138,26 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
                     end;
                 {error, Reason} ->
                     {error, {parse_error, Reason}}
+            end
+    end.
+
+-spec find_app_src(string(), string()) -> string() | undefined.
+find_app_src(HandlerPath, AppName) ->
+    %% Get app root directory (apps/butler_shared from apps/butler_shared/src/interfaces/in/file.erl)
+    AppRoot = filename:dirname(filename:dirname(filename:dirname(HandlerPath))),
+    %% Try src/<app_name>.app.src first
+    AppSrcPath1 = filename:join([AppRoot, "src", AppName ++ ".app.src"]),
+    case filelib:is_file(AppSrcPath1) of
+        true ->
+            AppSrcPath1;
+        false ->
+            %% Try <app_name>.app.src in app root
+            AppSrcPath2 = filename:join([AppRoot, AppName ++ ".app.src"]),
+            case filelib:is_file(AppSrcPath2) of
+                true ->
+                    AppSrcPath2;
+                false ->
+                    undefined
             end
     end.
 
