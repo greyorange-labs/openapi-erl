@@ -1,4 +1,4 @@
--module(rebar3_opapi_schema_converter_tests).
+-module(rebar3_openapi_schema_converter_tests).
 
 -include_lib("eunit/include/eunit.hrl").
 
@@ -31,7 +31,7 @@ convert_binary_type_test() ->
     Types = [{my_string, {type, 1, binary, []}}],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create a schema named "MyString" with type string
     ?assertMatch(#{<<"MyString">> := _}, Schemas),
@@ -44,7 +44,7 @@ convert_integer_type_test() ->
     Types = [{my_int, {type, 1, integer, []}}],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create a schema named "MyInt" with type integer
     ?assertMatch(#{<<"MyInt">> := _}, Schemas),
@@ -57,7 +57,7 @@ convert_float_type_test() ->
     Types = [{my_float, {type, 1, float, []}}],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create a schema named "MyFloat" with type number
     ?assertMatch(#{<<"MyFloat">> := _}, Schemas),
@@ -70,7 +70,7 @@ convert_boolean_type_test() ->
     Types = [{my_bool, {type, 1, boolean, []}}],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create a schema named "MyBool" with type boolean
     ?assertMatch(#{<<"MyBool">> := _}, Schemas),
@@ -89,7 +89,7 @@ convert_map_all_required_fields_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create an object schema with required fields
     ?assertMatch(#{<<"Person">> := _}, Schemas),
@@ -121,7 +121,7 @@ convert_map_with_optional_fields_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create an object schema with only name in required
     ?assertMatch(#{<<"User">> := _}, Schemas),
@@ -153,7 +153,7 @@ convert_union_type_to_oneof_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create a oneOf schema
     ?assertMatch(#{<<"Role">> := _}, Schemas),
@@ -179,7 +179,7 @@ convert_list_type_to_array_test() ->
     Types = [{tags, {type, 1, list, [{type, 1, binary, []}]}}],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create an array schema with string items
     ?assertMatch(#{<<"Tags">> := _}, Schemas),
@@ -209,7 +209,7 @@ convert_nested_map_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create nested object schema
     ?assertMatch(#{<<"UserProfile">> := _}, Schemas),
@@ -245,7 +245,7 @@ convert_user_type_reference_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create both schemas
     ?assertMatch(#{<<"UserId">> := _, <<"User">> := _}, Schemas),
@@ -287,7 +287,7 @@ convert_circular_reference_test() ->
     ],
 
     %% Execute conversion
-    Schemas = rebar3_opapi_schema_converter:types_to_schemas(Types),
+    Schemas = rebar3_openapi_schema_converter:types_to_schemas(Types),
 
     %% Assert: Should create node schema without infinite recursion
     ?assertMatch(#{<<"Node">> := _}, Schemas),

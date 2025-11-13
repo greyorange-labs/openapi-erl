@@ -1,7 +1,7 @@
 %%%===================================================================
-%%% Unit Tests for rebar3_opapi_builder
+%%% Unit Tests for rebar3_openapi_builder
 %%%===================================================================
-%%% This module contains unit tests for the rebar3_opapi_builder module,
+%%% This module contains unit tests for the rebar3_openapi_builder module,
 %%% focusing on building OpenAPI 3.0.x documents from expanded trails.
 %%%===================================================================
 %%%
@@ -17,7 +17,7 @@
 %%% Test Cases
 %%%===================================================================
 
--module(rebar3_opapi_builder_tests).
+-module(rebar3_openapi_builder_tests).
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -61,7 +61,7 @@ build_paths_from_trails_test() ->
     ],
 
     %% Execute
-    Paths = rebar3_opapi_builder:build_paths_from_trails(Trails),
+    Paths = rebar3_openapi_builder:build_paths_from_trails(Trails),
 
     %% Assert: Should have one path with converted format
     ?assertEqual(1, maps:size(Paths)),
@@ -103,7 +103,7 @@ build_components_with_schemas_test() ->
     ],
 
     %% Execute
-    Components = rebar3_opapi_builder:build_components(Types),
+    Components = rebar3_openapi_builder:build_components(Types),
 
     %% Assert: Should have schemas section
     ?assert(maps:is_key(<<"schemas">>, Components)),
@@ -186,7 +186,7 @@ build_complete_openapi_doc_test() ->
     AppName = <<"TestAPI">>,
 
     %% Execute
-    Doc = rebar3_opapi_builder:build_from_trails(Trails, Types, AppName),
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName),
 
     %% Assert: Check top-level structure
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),

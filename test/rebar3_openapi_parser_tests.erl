@@ -1,7 +1,7 @@
 %%%===================================================================
-%%% Unit Tests for rebar3_opapi_parser
+%%% Unit Tests for rebar3_openapi_parser
 %%%===================================================================
-%%% This module contains unit tests for the rebar3_opapi_parser module,
+%%% This module contains unit tests for the rebar3_openapi_parser module,
 %%% focusing on extracting types, routes, and contracts from Erlang handler files.
 %%%===================================================================
 %%%
@@ -17,7 +17,7 @@
 %%% Test Cases
 %%%===================================================================
 
--module(rebar3_opapi_parser_tests).
+-module(rebar3_openapi_parser_tests).
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -31,7 +31,7 @@ extract_trails_from_handler_test() ->
 
     %% Execute: Parse the file and extract trails
     {ok, Forms} = epp:parse_file(FixturePath, [{includes, []}, {macros, []}]),
-    Trails = rebar3_opapi_parser:extract_trails(Forms),
+    Trails = rebar3_openapi_parser:extract_trails(Forms),
 
     %% Assert: Should extract 2 trails
     ?assertEqual(2, length(Trails)),
@@ -89,7 +89,7 @@ extract_types_from_handler_test() ->
 
     %% Execute: Parse the file and extract types
     {ok, Forms} = epp:parse_file(FixturePath, [{includes, []}, {macros, []}]),
-    Types = rebar3_opapi_parser:extract_types(Forms),
+    Types = rebar3_openapi_parser:extract_types(Forms),
 
     %% Assert: Should extract 2 types (user_id, user)
     ?assertEqual(2, length(Types)),
@@ -118,7 +118,7 @@ extract_metadata_with_type_refs_test() ->
 
     %% Execute: Parse the file and extract trails
     {ok, Forms} = epp:parse_file(FixturePath, [{includes, []}, {macros, []}]),
-    Trails = rebar3_opapi_parser:extract_trails(Forms),
+    Trails = rebar3_openapi_parser:extract_trails(Forms),
 
     %% Get first trail
     [Trail1 | _] = Trails,

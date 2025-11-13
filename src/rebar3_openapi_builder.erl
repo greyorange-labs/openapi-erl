@@ -1,4 +1,4 @@
--module(rebar3_opapi_builder).
+-module(rebar3_openapi_builder).
 
 %%%===================================================================
 %%% OpenAPI Document Builder
@@ -194,7 +194,7 @@ build_components(Types) ->
 -spec extract_schemas([type_def()]) -> map().
 extract_schemas(Types) ->
     %% Use schema converter to transform Erlang types to OpenAPI schemas
-    rebar3_opapi_schema_converter:types_to_schemas(Types).
+    rebar3_openapi_schema_converter:types_to_schemas(Types).
 
 -spec method_to_lowercase(binary() | list()) -> binary().
 method_to_lowercase(Method) when is_binary(Method) ->

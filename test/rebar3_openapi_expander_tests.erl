@@ -1,7 +1,7 @@
 %%%===================================================================
-%%% Unit Tests for rebar3_opapi_expander
+%%% Unit Tests for rebar3_openapi_expander
 %%%===================================================================
-%%% This module contains unit tests for the rebar3_opapi_expander module,
+%%% This module contains unit tests for the rebar3_openapi_expander module,
 %%% focusing on expanding type references in trails metadata to OpenAPI 3.0.x $refs.
 %%%===================================================================
 %%%
@@ -19,7 +19,7 @@
 %%% Test Cases
 %%%===================================================================
 
--module(rebar3_opapi_expander_tests).
+-module(rebar3_openapi_expander_tests).
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -29,23 +29,23 @@
 %% Test 1: Generate unique operationId from path and method
 generate_unique_operation_id_test() ->
     %% Test simple path
-    OpId1 = rebar3_opapi_expander:generate_operation_id(<<"/users">>, get),
+    OpId1 = rebar3_openapi_expander:generate_operation_id(<<"/users">>, get),
     ?assertEqual(<<"getUsers">>, OpId1),
 
     %% Test path with parameter
-    OpId2 = rebar3_opapi_expander:generate_operation_id(<<"/users/:id">>, get),
+    OpId2 = rebar3_openapi_expander:generate_operation_id(<<"/users/:id">>, get),
     ?assertEqual(<<"getUsersById">>, OpId2),
 
     %% Test POST method
-    OpId3 = rebar3_opapi_expander:generate_operation_id(<<"/users">>, post),
+    OpId3 = rebar3_openapi_expander:generate_operation_id(<<"/users">>, post),
     ?assertEqual(<<"postUsers">>, OpId3),
 
     %% Test nested path
-    OpId4 = rebar3_opapi_expander:generate_operation_id(<<"/api/users/:id/profile">>, put),
+    OpId4 = rebar3_openapi_expander:generate_operation_id(<<"/api/users/:id/profile">>, put),
     ?assertEqual(<<"putApiUsersByIdProfile">>, OpId4),
 
     %% Test DELETE method
-    OpId5 = rebar3_opapi_expander:generate_operation_id(<<"/users/:id">>, delete),
+    OpId5 = rebar3_openapi_expander:generate_operation_id(<<"/users/:id">>, delete),
     ?assertEqual(<<"deleteUsersById">>, OpId5).
 
 %%%===================================================================
@@ -65,7 +65,7 @@ expand_parameter_with_type_ref_test() ->
     Types = [{user_id, {type, 1, binary, []}}],
 
     %% Execute expansion
-    Expanded = rebar3_opapi_expander:expand_parameters([Param], Types),
+    Expanded = rebar3_openapi_expander:expand_parameters([Param], Types),
 
     %% Assert: Should have one parameter
     ?assertEqual(1, length(Expanded)),
@@ -100,7 +100,7 @@ expand_request_body_with_type_ref_test() ->
     Types = [{user, {type, 1, map, []}}],
 
     %% Execute expansion
-    Expanded = rebar3_opapi_expander:expand_request_body(RequestBody, Types),
+    Expanded = rebar3_openapi_expander:expand_request_body(RequestBody, Types),
 
     %% Assert: required field unchanged
     ?assertEqual(true, maps:get(required, Expanded)),
@@ -138,7 +138,7 @@ expand_response_with_type_ref_test() ->
     Types = [{user, {type, 1, map, []}}],
 
     %% Execute expansion
-    Expanded = rebar3_opapi_expander:expand_responses(Responses, Types),
+    Expanded = rebar3_openapi_expander:expand_responses(Responses, Types),
 
     %% Check 200 response
     Response200 = maps:get(<<"200">>, Expanded),
@@ -215,7 +215,7 @@ expand_complete_trail_test() ->
     ],
 
     %% Execute expansion
-    Expanded = rebar3_opapi_expander:expand_trail(Trail, Types),
+    Expanded = rebar3_openapi_expander:expand_trail(Trail, Types),
 
     %% Check path and handler unchanged
     ?assertEqual(<<"/api/users/:id">>, maps:get(path, Expanded)),

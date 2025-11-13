@@ -1,4 +1,4 @@
--module(rebar3_opapi_prv_extract).
+-module(rebar3_openapi_prv_extract).
 -behaviour(provider).
 
 -export([init/1, do/1, format_error/1, write_openapi_file/2]).
@@ -16,10 +16,10 @@ init(State) ->
     Provider = providers:create([
         {name, ?PROVIDER},
         {module, ?MODULE},
-        {namespace, opapi},
+        {namespace, openapi},
         {bare, true},
         {deps, ?DEPS},
-        {example, "rebar3 opapi extract --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl --output openapi.yaml"},
+        {example, "rebar3 openapi extract --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl --output openapi.yaml"},
         {short_desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
         {desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
         {opts, [
@@ -47,7 +47,7 @@ do(State) ->
         end
     catch
         Class:Err:Stack ->
-            rebar_api:error("opapi extract failed: ~p:~p", [Class, Err]),
+            rebar_api:error("openapi extract failed: ~p:~p", [Class, Err]),
             rebar_api:error("Stack trace: ~p", [Stack]),
             {error, format_error({internal_error, Class, Err})}
     end.
@@ -105,27 +105,27 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
                 {ok, Forms} ->
                     %% Extract trails and types
                     Trails = try
-                        rebar3_opapi_parser:extract_trails(Forms)
+                        rebar3_openapi_parser:extract_trails(Forms)
                     catch
                         C:E ->
                             rebar_api:warn("Failed to extract trails: ~p:~p", [C, E]),
                             []
                     end,
 
-                    Types = rebar3_opapi_parser:extract_types(Forms),
+                    Types = rebar3_openapi_parser:extract_types(Forms),
 
                     rebar_api:info("Found ~p trail(s), ~p type(s)",
                         [length(Trails), length(Types)]),
 
                     %% Expand trails metadata (type refs -> $refs)
-                    ExpandedTrails = rebar3_opapi_expander:expand_trails(Trails, Types),
+                    ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
 
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = case AppNameOpt of
                         undefined -> <<"API">>;
                         AppNameStr -> list_to_binary(AppNameStr)
                     end,
-                    OpenAPIDoc = rebar3_opapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin),
+                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin),
 
                     %% Write to file
                     case write_openapi_file(OutputPath, OpenAPIDoc) of

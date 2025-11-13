@@ -1,4 +1,4 @@
--module(rebar3_opapi_schema_converter).
+-module(rebar3_openapi_schema_converter).
 
 %%%===================================================================
 %%% OpenAPI Schema Converter
@@ -7,7 +7,7 @@
 %%% Converts Erlang type definitions (Abstract Syntax Trees) to
 %%% OpenAPI 3.0.x schema format.
 %%%
-%%% Adapted from gm_opapi_extractor.erl in Butler Server.
+%%% Adapted from gm_openapi_extractor.erl in Butler Server.
 %%%
 %%%===================================================================
 

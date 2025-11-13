@@ -1,4 +1,4 @@
-# rebar3_opapi
+# rebar3_openapi
 
 A rebar3 plugin that generates **OpenAPI 3.0.x** documentation from Erlang handler modules using the standard `trails` library format.
 
@@ -16,7 +16,7 @@ A rebar3 plugin that generates **OpenAPI 3.0.x** documentation from Erlang handl
 Add the plugin to your `rebar.config`:
 
 ```erlang
-{project_plugins, [rebar3_opapi]}.
+{project_plugins, [rebar3_openapi]}.
 
 {deps, [
     {trails, ".*", {git, "https://github.com/inaka/cowboy_trails.git", {tag, "..."}}}
@@ -108,7 +108,7 @@ trails() ->
 Run the plugin:
 
 ```bash
-rebar3 opapi extract --handler src/user_handler.erl --output openapi.yaml
+rebar3 openapi extract --handler src/user_handler.erl --output openapi.yaml
 ```
 
 ### 4. View Generated OpenAPI
@@ -172,7 +172,7 @@ components:
 ### Command Line
 
 ```bash
-rebar3 opapi extract \
+rebar3 openapi extract \
   --handler path/to/handler.erl \
   --output openapi.yaml \
   --app MyApp

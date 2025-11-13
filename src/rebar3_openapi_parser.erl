@@ -1,4 +1,4 @@
--module(rebar3_opapi_parser).
+-module(rebar3_openapi_parser).
 
 %%%===================================================================
 %%% Parser for OpenAPI Documentation Extraction
