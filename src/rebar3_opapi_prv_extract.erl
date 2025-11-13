@@ -1,5 +1,4 @@
 -module(rebar3_opapi_prv_extract).
--behaviour(provider).
 
 -export([do/1, format_error/1]).
 

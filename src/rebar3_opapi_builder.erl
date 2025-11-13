@@ -100,7 +100,7 @@ build_components(Operations, AppName) ->
     }.
 
 -spec extract_schemas([operation()], atom()) -> map().
-extract_schemas(Operations, AppName) ->
+extract_schemas(_Operations, _AppName) ->
     %% For now, return empty schemas
     %% Schemas will be extracted from type definitions in future enhancement
     #{}.
