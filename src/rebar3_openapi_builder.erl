@@ -21,7 +21,8 @@
 %%%===================================================================
 
 %% @doc Build OpenAPI document from expanded trails (new approach)
--spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) -> map().
+-spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) ->
+    map().
 build_from_trails(Trails, Types, AppName, AppSrcPath) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
@@ -29,7 +30,8 @@ build_from_trails(Trails, Types, AppName, AppSrcPath) ->
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths_from_trails(Trails),
         <<"components">> => build_components(Types),
-        <<"security">> => []  % Empty array indicates no security required (satisfies security-defined rule)
+        % Empty array indicates no security required (satisfies security-defined rule)
+        <<"security">> => []
     }.
 
 %% @doc Build OpenAPI document from operations (legacy approach)
@@ -68,42 +70,16 @@ build_info(AppName, AppSrcPath) when is_binary(AppName) ->
 read_app_src_info(undefined) ->
     {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>};
 read_app_src_info(AppSrcPath) ->
-    case file:read_file(AppSrcPath) of
-        {ok, Content} ->
-            case parse_app_src(Content) of
+    case file:consult(AppSrcPath) of
+        {ok, [Term]} ->
+            case extract_app_info(Term) of
                 {ok, Version, Description} ->
                     {Version, Description};
-                {error, _Reason} ->
+                error ->
                     {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>}
             end;
         {error, _Reason} ->
             {<<"1.0.0">>, <<"API documentation generated from Erlang handler modules">>}
-    end.
-
--spec parse_app_src(binary()) -> {ok, binary(), binary()} | {error, term()}.
-parse_app_src(Content) ->
-    try
-        %% Parse Erlang term from file content
-        %% file:consult expects a file path, so we'll parse manually
-        case erl_scan:string(binary_to_list(Content)) of
-            {ok, Tokens, _} ->
-                case erl_parse:parse_term(Tokens) of
-                    {ok, Term} ->
-                        case extract_app_info(Term) of
-                            {ok, Version, Description} ->
-                                {ok, Version, Description};
-                            error ->
-                                {error, not_found}
-                        end;
-                    {error, _} ->
-                        {error, parse_error}
-                end;
-            {error, _, _} ->
-                {error, scan_error}
-        end
-    catch
-        _:Reason ->
-            {error, Reason}
     end.
 
 -spec extract_app_info(term()) -> {ok, binary(), binary()} | error.
@@ -170,14 +146,15 @@ build_paths_from_trails(Trails) ->
 
             %% Process each method in metadata
             PathMethods = maps:fold(
-                fun(Method, OperationMeta, MethodAcc) when is_atom(Method) ->
-                    %% Convert metadata to OpenAPI operation object
-                    OpObj = operation_meta_to_openapi(OperationMeta),
-                    MethodBin = method_to_lowercase(Method),
-                    MethodAcc#{MethodBin => OpObj};
-                   (_, _, MethodAcc) ->
-                    %% Skip non-method keys
-                    MethodAcc
+                fun
+                    (Method, OperationMeta, MethodAcc) when is_atom(Method) ->
+                        %% Convert metadata to OpenAPI operation object
+                        OpObj = operation_meta_to_openapi(OperationMeta),
+                        MethodBin = method_to_lowercase(Method),
+                        MethodAcc#{MethodBin => OpObj};
+                    (_, _, MethodAcc) ->
+                        %% Skip non-method keys
+                        MethodAcc
                 end,
                 #{},
                 Metadata
@@ -195,10 +172,11 @@ build_paths_from_trails(Trails) ->
 -spec operation_meta_to_openapi(map()) -> map().
 operation_meta_to_openapi(Meta) ->
     %% Start with operationId (should already be present from expander)
-    BaseOp = case maps:get(operationId, Meta, undefined) of
-        undefined -> #{};
-        OpId -> #{<<"operationId">> => OpId}
-    end,
+    BaseOp =
+        case maps:get(operationId, Meta, undefined) of
+            undefined -> #{};
+            OpId -> #{<<"operationId">> => OpId}
+        end,
 
     %% Add optional fields
     Op1 = add_if_present(BaseOp, <<"tags">>, maps:get(tags, Meta, undefined)),
@@ -238,29 +216,32 @@ build_paths(Operations) ->
             },
 
             %% Add request body if present
-            OpObj1 = case maps:get(request_body, Operation, undefined) of
-                undefined ->
-                    OpObj;
-                RequestBody ->
-                    OpObj#{<<"requestBody">> => RequestBody}
-            end,
+            OpObj1 =
+                case maps:get(request_body, Operation, undefined) of
+                    undefined ->
+                        OpObj;
+                    RequestBody ->
+                        OpObj#{<<"requestBody">> => RequestBody}
+                end,
 
             %% Add responses
             OpObj2 = OpObj1#{<<"responses">> => maps:get(responses, Operation, #{})},
 
             %% Add parameters if present
-            OpObj3 = case maps:get(parameters, Operation, []) of
-                [] ->
-                    OpObj2;
-                Params ->
-                    OpObj2#{<<"parameters">> => Params}
-            end,
+            OpObj3 =
+                case maps:get(parameters, Operation, []) of
+                    [] ->
+                        OpObj2;
+                    Params ->
+                        OpObj2#{<<"parameters">> => Params}
+                end,
 
             %% Group by path
-            PathBin = case is_binary(Path) of
-                true -> Path;
-                false -> list_to_binary(Path)
-            end,
+            PathBin =
+                case is_binary(Path) of
+                    true -> Path;
+                    false -> list_to_binary(Path)
+                end,
             MethodBin = method_to_lowercase(Method),
             ExistingPath = maps:get(PathBin, Acc, #{}),
             Acc#{PathBin => ExistingPath#{MethodBin => OpObj3}}
@@ -293,10 +274,11 @@ method_to_lowercase(Method) when is_list(Method) ->
     list_to_binary(MethodLower);
 method_to_lowercase(Method) ->
     %% Handle other types (atom, etc.) by converting to binary first
-    MethodBin = case is_atom(Method) of
-        true -> atom_to_binary(Method, utf8);
-        false -> list_to_binary(io_lib:format("~p", [Method]))
-    end,
+    MethodBin =
+        case is_atom(Method) of
+            true -> atom_to_binary(Method, utf8);
+            false -> list_to_binary(io_lib:format("~p", [Method]))
+        end,
     MethodStr = binary_to_list(MethodBin),
     MethodLower = string:to_lower(MethodStr),
     list_to_binary(MethodLower).
@@ -309,7 +291,8 @@ method_to_lowercase(Method) ->
     path => binary(),
     handler => atom(),
     options => map() | list(),
-    metadata => map()  % Expanded metadata with $refs
+    % Expanded metadata with $refs
+    metadata => map()
 }.
 
 -type operation() :: #{
@@ -325,4 +308,3 @@ method_to_lowercase(Method) ->
 }.
 
 -type type_def() :: {atom(), erl_parse:abstract_type()}.
-
