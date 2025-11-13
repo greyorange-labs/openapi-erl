@@ -1,20 +1,42 @@
 -module(rebar3_opapi_prv_extract).
+-behaviour(provider).
 
--export([do/1, format_error/1]).
+-export([init/1, do/1, format_error/1]).
+
+-define(PROVIDER, extract).
+-define(DEPS, [compile]).
 
 %%%===================================================================
-%%% Provider Implementation
+%%% Public API
 %%%===================================================================
+
+-spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
+init(State) ->
+    Provider = providers:create([
+        {name, ?PROVIDER},
+        {module, ?MODULE},
+        {namespace, opapi},
+        {deps, ?DEPS},
+        {example, "rebar3 opapi extract --handler gm_common_http_handler --app butler_shared --output openapi.yaml"},
+        {short_desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
+        {desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
+        {opts, [
+            {handler, undefined, "handler", string, "Handler module name (required)"},
+            {app, undefined, "app", string, "Application name (required)"},
+            {output, undefined, "output", string, "Output file path (required)"}
+        ]}
+    ]),
+    {ok, rebar_state:add_provider(State, Provider)}.
 
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
     try
         {Args, _} = rebar_state:command_parsed_args(State),
-
+        
         Handler = proplists:get_value(handler, Args),
         App = proplists:get_value(app, Args),
         Output = proplists:get_value(output, Args),
-
+        
         case validate_args(Handler, App, Output) of
             ok ->
                 extract_and_generate(State, Handler, App, Output);
@@ -26,6 +48,24 @@ do(State) ->
             rebar_api:error("opapi extract failed: ~p:~p~n~p", [Class, Err, Stack]),
             {error, "Internal error during extraction"}
     end.
+
+-spec format_error(any()) -> iolist().
+format_error({missing_arg, handler}) ->
+    "Missing required argument: --handler <handler-module-name>";
+format_error({missing_arg, app}) ->
+    "Missing required argument: --app <app-name>";
+format_error({missing_arg, output}) ->
+    "Missing required argument: --output <output-file-path>";
+format_error({file_write_error, Path, Reason}) ->
+    io_lib:format("Failed to write file ~s: ~p", [Path, Reason]);
+format_error({extraction_error, Reason}) ->
+    io_lib:format("Failed to extract contracts: ~p", [Reason]);
+format_error(Reason) ->
+    io_lib:format("~p", [Reason]).
+
+%%%===================================================================
+%%% Internal Functions
+%%%===================================================================
 
 -spec validate_args(term(), term(), term()) -> ok | {error, term()}.
 validate_args(undefined, _, _) ->
@@ -42,18 +82,18 @@ validate_args(_, _, _) ->
 extract_and_generate(State, HandlerStr, AppStr, OutputPath) ->
     HandlerModule = list_to_atom(HandlerStr),
     AppName = list_to_atom(AppStr),
-
+    
     rebar_api:info("Extracting OpenAPI documentation...", []),
     rebar_api:info("  Handler: ~s", [HandlerStr]),
     rebar_api:info("  App: ~s", [AppStr]),
     rebar_api:info("  Output: ~s", [OutputPath]),
-
+    
     %% Extract operations from handler
     case gm_opapi_extractor:extract_handler(HandlerModule) of
         {ok, Operations} ->
             %% Build OpenAPI document
             OpenAPIDoc = rebar3_opapi_builder:build(Operations, AppName),
-
+            
             %% Write to file
             case write_openapi_file(OutputPath, OpenAPIDoc) of
                 ok ->
@@ -101,18 +141,3 @@ write_json_file(FilePath, Doc) ->
         Class:Reason ->
             {error, {Class, Reason}}
     end.
-
--spec format_error(term()) -> iolist().
-format_error({missing_arg, handler}) ->
-    "Missing required argument: --handler <handler-module-name>";
-format_error({missing_arg, app}) ->
-    "Missing required argument: --app <app-name>";
-format_error({missing_arg, output}) ->
-    "Missing required argument: --output <output-file-path>";
-format_error({file_write_error, Path, Reason}) ->
-    io_lib:format("Failed to write file ~s: ~p", [Path, Reason]);
-format_error({extraction_error, Reason}) ->
-    io_lib:format("Failed to extract contracts: ~p", [Reason]);
-format_error(Reason) ->
-    io_lib:format("~p", [Reason]).
-
