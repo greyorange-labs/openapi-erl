@@ -224,3 +224,73 @@ build_complete_openapi_doc_test() ->
     Schemas = maps:get(<<"schemas">>, Components),
     ?assert(maps:is_key(<<"User">>, Schemas)).
 
+%%%===================================================================
+%%% Test 4: Build info from app.src file
+%%%===================================================================
+
+%% Test 4: Build info section with app.src file
+build_info_from_app_src_test() ->
+    %% Create a temporary app.src file for testing
+    TestAppSrcPath = "test/fixtures/test_app.app.src",
+    
+    %% Verify the test file exists
+    ?assert(filelib:is_file(TestAppSrcPath), "Test app.src file should exist"),
+    
+    %% Execute: Build info with app.src path
+    AppName = <<"test_app">>,
+    Info = rebar3_openapi_builder:build_info(AppName, TestAppSrcPath),
+    
+    %% Assert: Should extract version and description from app.src
+    ?assertEqual(<<"test_app">>, maps:get(<<"title">>, Info)),
+    ?assertEqual(<<"2.5.0">>, maps:get(<<"version">>, Info)),
+    ?assertEqual(<<"Test application for OpenAPI plugin testing">>, maps:get(<<"description">>, Info)).
+
+%% Test 5: Build info without app.src file (should use defaults)
+build_info_without_app_src_test() ->
+    %% Execute: Build info without app.src path
+    AppName = <<"TestAPI">>,
+    Info = rebar3_openapi_builder:build_info(AppName, undefined),
+    
+    %% Assert: Should use default values
+    ?assertEqual(<<"TestAPI">>, maps:get(<<"title">>, Info)),
+    ?assertEqual(<<"1.0.0">>, maps:get(<<"version">>, Info)),
+    ?assertEqual(<<"API documentation generated from Erlang handler modules">>, maps:get(<<"description">>, Info)).
+
+%% Test 6: Build complete document with app.src
+build_complete_doc_with_app_src_test() ->
+    %% Input: Simple trail
+    Trails = [
+        #{
+            path => <<"/api/test">>,
+            handler => test_handler,
+            options => #{},
+            metadata => #{
+                get => #{
+                    operationId => <<"testEndpoint">>,
+                    tags => [<<"test">>],
+                    responses => #{
+                        <<"200">> => #{description => <<"Success">>}
+                    }
+                }
+            }
+        }
+    ],
+    
+    Types = [],
+    AppName = <<"test_app">>,
+    TestAppSrcPath = "test/fixtures/test_app.app.src",
+    
+    %% Execute
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, AppName, TestAppSrcPath),
+    
+    %% Assert: Check info section has values from app.src
+    Info = maps:get(<<"info">>, Doc),
+    ?assertEqual(<<"test_app">>, maps:get(<<"title">>, Info)),
+    ?assertEqual(<<"2.5.0">>, maps:get(<<"version">>, Info)),
+    ?assertEqual(<<"Test application for OpenAPI plugin testing">>, maps:get(<<"description">>, Info)),
+    
+    %% Check other sections still work
+    ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),
+    ?assert(maps:is_key(<<"paths">>, Doc)),
+    ?assert(maps:is_key(<<"components">>, Doc)).
+

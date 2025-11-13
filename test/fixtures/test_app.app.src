@@ -1,0 +1,9 @@
+{application, test_app, [
+    {description, "Test application for OpenAPI plugin testing"},
+    {vsn, "2.5.0"},
+    {modules, []},
+    {registered, []},
+    {applications, [kernel, stdlib]},
+    {env, []}
+]}.
+

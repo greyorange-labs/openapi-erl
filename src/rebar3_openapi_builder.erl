@@ -13,7 +13,8 @@
     build/3,
     build_from_trails/4,
     build_paths_from_trails/1,
-    build_components/1
+    build_components/1,
+    build_info/2
 ]).
 
 %%%===================================================================
