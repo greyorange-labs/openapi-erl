@@ -47,8 +47,9 @@ do(State) ->
         end
     catch
         Class:Err:Stack ->
-            rebar_api:error("opapi extract failed: ~p:~p~n~p", [Class, Err, Stack]),
-            {error, "Internal error during extraction"}
+            rebar_api:error("opapi extract failed: ~p:~p", [Class, Err]),
+            rebar_api:error("Stack trace: ~p", [Stack]),
+            {error, format_error({internal_error, Class, Err})}
     end.
 
 -spec format_error(any()) -> iolist().
@@ -62,6 +63,8 @@ format_error({file_not_found, Path}) ->
     io_lib:format("Handler file not found: ~s", [Path]);
 format_error({parse_error, Reason}) ->
     io_lib:format("Failed to parse handler file: ~p", [Reason]);
+format_error({internal_error, Class, Err}) ->
+    io_lib:format("Internal error: ~p:~p", [Class, Err]);
 format_error({extraction_error, Reason}) ->
     io_lib:format("Failed to extract contracts: ~p", [Reason]);
 format_error(Reason) ->
