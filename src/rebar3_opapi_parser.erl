@@ -22,10 +22,8 @@
 %%% Public API
 %%%===================================================================
 
--spec parse_file(FilePath :: string()) ->
-    {ok, {[contract()], [type_def()]}} | {error, term()};
-    (FilePath :: string(), IncludePaths :: [string()]) ->
-    {ok, {[contract()], [type_def()]}} | {error, term()}.
+-spec parse_file(string()) -> {ok, {[contract()], [type_def()]}} | {error, term()}.
+-spec parse_file(string(), [string()]) -> {ok, {[contract()], [type_def()]}} | {error, term()}.
 parse_file(FilePath) ->
     parse_file(FilePath, []).
 parse_file(FilePath, IncludePaths) ->
