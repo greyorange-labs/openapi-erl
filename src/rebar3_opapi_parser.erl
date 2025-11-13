@@ -25,24 +25,16 @@
 -spec parse_file(FilePath :: string()) ->
     {ok, {[contract()], [type_def()]}} | {error, term()}.
 parse_file(FilePath) ->
-    case file:read_file(FilePath) of
-        {ok, Binary} ->
-            Source = binary_to_list(Binary),
-            case erl_scan:string(Source) of
-                {ok, Tokens, _} ->
-                    case erl_parse:parse_form_list(Tokens) of
-                        {ok, Forms} ->
-                            Contracts = extract_contracts(Forms),
-                            Types = extract_types(Forms),
-                            {ok, {Contracts, Types}};
-                        {error, Error} ->
-                            {error, {parse_error, Error}}
-                    end;
-                {error, Error, _} ->
-                    {error, {scan_error, Error}}
-            end;
-        {error, Reason} ->
-            {error, {file_read_error, FilePath, Reason}}
+    %% Use epp to handle includes and macros
+    case epp:parse_file(FilePath, [], []) of
+        {ok, Forms} ->
+            Contracts = extract_contracts(Forms),
+            Types = extract_types(Forms),
+            {ok, {Contracts, Types}};
+        {error, Error} ->
+            {error, {parse_error, Error}};
+        {error, Error, _} ->
+            {error, {parse_error, Error}}
     end.
 
 -spec extract_contracts([erl_parse:abstract_form()]) -> [contract()].
