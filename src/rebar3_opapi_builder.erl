@@ -114,13 +114,22 @@ extract_schemas(_Operations, _AppName) ->
     %% Schemas will be extracted from type definitions in future enhancement
     #{}.
 
--spec method_to_lowercase(binary()) -> binary().
+-spec method_to_lowercase(binary() | list()) -> binary().
 method_to_lowercase(Method) when is_binary(Method) ->
     MethodStr = binary_to_list(Method),
     MethodLower = string:to_lower(MethodStr),
     list_to_binary(MethodLower);
 method_to_lowercase(Method) when is_list(Method) ->
     MethodLower = string:to_lower(Method),
+    list_to_binary(MethodLower);
+method_to_lowercase(Method) ->
+    %% Handle other types (atom, etc.) by converting to binary first
+    MethodBin = case is_atom(Method) of
+        true -> atom_to_binary(Method, utf8);
+        false -> list_to_binary(io_lib:format("~p", [Method]))
+    end,
+    MethodStr = binary_to_list(MethodBin),
+    MethodLower = string:to_lower(MethodStr),
     list_to_binary(MethodLower).
 
 %%%===================================================================
