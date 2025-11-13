@@ -23,10 +23,14 @@
 %%%===================================================================
 
 -spec parse_file(FilePath :: string()) ->
+    {ok, {[contract()], [type_def()]}} | {error, term()};
+    (FilePath :: string(), IncludePaths :: [string()]) ->
     {ok, {[contract()], [type_def()]}} | {error, term()}.
 parse_file(FilePath) ->
+    parse_file(FilePath, []).
+parse_file(FilePath, IncludePaths) ->
     %% Use epp to handle includes and macros
-    case epp:parse_file(FilePath, [], []) of
+    case epp:parse_file(FilePath, IncludePaths, []) of
         {ok, Forms} ->
             Contracts = extract_contracts(Forms),
             Types = extract_types(Forms),

@@ -95,11 +95,13 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
         false ->
             {error, {file_not_found, HandlerPath}};
         true ->
+            %% Get include paths from rebar state
+            IncludePaths = get_include_paths(State, HandlerPath),
             %% Parse handler file to extract contracts, types, and routes
-            case rebar3_opapi_parser:parse_file(HandlerPath) of
+            case rebar3_opapi_parser:parse_file(HandlerPath, IncludePaths) of
                 {ok, {Contracts, Types}} ->
                     %% Also extract routes from the parsed forms
-                    case parse_forms(HandlerPath) of
+                    case parse_forms(HandlerPath, IncludePaths) of
                         {ok, Forms} ->
                             Routes = rebar3_opapi_parser:extract_routes(Forms),
                             rebar_api:info("Found ~p contract(s), ~p type(s), ~p route(s)", 
@@ -131,10 +133,19 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
             end
     end.
 
--spec parse_forms(string()) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
-parse_forms(FilePath) ->
+-spec get_include_paths(rebar_state:t(), string()) -> [string()].
+get_include_paths(_State, HandlerPath) ->
+    %% Get app root directory (apps/butler_shared from apps/butler_shared/src/interfaces/in/file.erl)
+    AppRoot = filename:dirname(filename:dirname(filename:dirname(HandlerPath))),
+    IncludeDir = filename:join([AppRoot, "include"]),
+    SrcDir = filename:dirname(HandlerPath),
+    %% Include app root for relative includes like -include("src/gm_common.hrl")
+    [AppRoot, IncludeDir, SrcDir].
+
+-spec parse_forms(string(), [string()]) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
+parse_forms(FilePath, IncludePaths) ->
     %% Use epp to handle includes and macros
-    case epp:parse_file(FilePath, [], []) of
+    case epp:parse_file(FilePath, IncludePaths, []) of
         {ok, Forms} ->
             {ok, Forms};
         {error, Error} ->
