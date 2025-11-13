@@ -143,9 +143,14 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 
 -spec find_app_src(string(), string()) -> string() | undefined.
 find_app_src(HandlerPath, AppName) ->
-    %% Get app root directory (apps/butler_shared from apps/butler_shared/src/interfaces/in/file.erl)
-    AppRoot = filename:dirname(filename:dirname(filename:dirname(HandlerPath))),
-    %% Try src/<app_name>.app.src first
+    %% Get app root directory
+    %% HandlerPath: apps/butler_shared/src/interfaces/in/file.erl
+    %% We need: apps/butler_shared
+    %% Strategy: Find the directory that contains "src" subdirectory
+    HandlerDir = filename:dirname(HandlerPath),
+    AppRoot = find_app_root(HandlerDir),
+    
+    %% Try src/<app_name>.app.src first (most common location)
     AppSrcPath1 = filename:join([AppRoot, "src", AppName ++ ".app.src"]),
     case filelib:is_file(AppSrcPath1) of
         true ->
@@ -158,6 +163,26 @@ find_app_src(HandlerPath, AppName) ->
                     AppSrcPath2;
                 false ->
                     undefined
+            end
+    end.
+
+-spec find_app_root(string()) -> string().
+find_app_root(Dir) ->
+    %% Check if current directory has "src" subdirectory
+    SrcDir = filename:join([Dir, "src"]),
+    case filelib:is_dir(SrcDir) of
+        true ->
+            %% Found app root (has src subdirectory)
+            Dir;
+        false ->
+            %% Go up one level and try again
+            Parent = filename:dirname(Dir),
+            case Parent =:= Dir of
+                true ->
+                    %% Reached filesystem root, return current dir as fallback
+                    Dir;
+                false ->
+                    find_app_root(Parent)
             end
     end.
 
