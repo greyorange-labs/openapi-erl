@@ -28,7 +28,13 @@
 build_from_trails(Trails, Types, AppName, AppSrcPath) ->
     build_from_trails(Trails, Types, AppName, AppSrcPath, undefined).
 
--spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined, WorkspaceRoot :: string() | undefined) -> map().
+-spec build_from_trails(
+    [expanded_trail()],
+    [type_def()],
+    AppName :: atom() | binary(),
+    AppSrcPath :: string() | undefined,
+    WorkspaceRoot :: string() | undefined
+) -> map().
 build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
@@ -120,20 +126,21 @@ execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot) ->
     %% Resolve command path relative to app.src file location
     AppSrcDir = filename:dirname(AppSrcPath),
     CmdPath = filename:absname(Cmd, AppSrcDir),
-    
+
     %% If workspace root is provided and command path is relative, try resolving from workspace root
-    FinalCmdPath = case WorkspaceRoot of
-        undefined ->
-            CmdPath;
-        Root when is_list(Root) ->
-            %% Try workspace root first, then fallback to app.src relative
-            WorkspaceCmdPath = filename:absname(Cmd, Root),
-            case filelib:is_file(WorkspaceCmdPath) of
-                true -> WorkspaceCmdPath;
-                false -> CmdPath
-            end
-    end,
-    
+    FinalCmdPath =
+        case WorkspaceRoot of
+            undefined ->
+                CmdPath;
+            Root when is_list(Root) ->
+                %% Try workspace root first, then fallback to app.src relative
+                WorkspaceCmdPath = filename:absname(Cmd, Root),
+                case filelib:is_file(WorkspaceCmdPath) of
+                    true -> WorkspaceCmdPath;
+                    false -> CmdPath
+                end
+        end,
+
     %% Execute the command
     case filelib:is_file(FinalCmdPath) of
         true ->

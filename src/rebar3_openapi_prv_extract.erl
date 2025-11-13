@@ -123,10 +123,10 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 
                     %% Find app.src file
                     AppSrcPath = find_app_src(HandlerPath, AppName),
-                    
+
                     %% Get workspace root (project root directory)
                     WorkspaceRoot = rebar_dir:root_dir(State),
-                    
+
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = list_to_binary(AppName),
                     OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot),
