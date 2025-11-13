@@ -108,9 +108,14 @@ extract_version_from_list([], _AppSrcPath, _WorkspaceRoot) ->
     <<"1.0.0">>;
 extract_version_from_list([{vsn, Version} | _Rest], AppSrcPath, WorkspaceRoot) ->
     case Version of
-        {cmd, Cmd} when is_list(Cmd) ->
+        {cmd, Cmd} ->
             %% Version is from command, execute it
-            execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot);
+            CmdStr = case Cmd of
+                CmdList when is_list(CmdList) -> CmdList;
+                CmdBin when is_binary(CmdBin) -> binary_to_list(CmdBin);
+                _ -> ""
+            end,
+            execute_version_cmd(CmdStr, AppSrcPath, WorkspaceRoot);
         VersionStr when is_list(VersionStr) ->
             list_to_binary(VersionStr);
         VersionBin when is_binary(VersionBin) ->
@@ -141,19 +146,34 @@ execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot) ->
                 end
         end,
 
-    %% Execute the command
+    %% Execute the command (try even if file check fails, in case of permission issues)
     case filelib:is_file(FinalCmdPath) of
         true ->
-            case os:cmd(FinalCmdPath) of
+            %% Make script executable and run it
+            _ = os:cmd("chmod +x " ++ FinalCmdPath ++ " 2>/dev/null"),
+            case os:cmd("bash " ++ FinalCmdPath) of
                 [] ->
                     <<"1.0.0">>;
                 Output ->
                     %% Trim whitespace and newlines
                     Trimmed = string:trim(Output, both, "\n\r\t "),
-                    list_to_binary(Trimmed)
+                    case Trimmed of
+                        [] -> <<"1.0.0">>;
+                        _ -> list_to_binary(Trimmed)
+                    end
             end;
         false ->
-            <<"1.0.0">>
+            %% Try executing anyway (might be in PATH or relative path issue)
+            case os:cmd("bash " ++ FinalCmdPath) of
+                [] ->
+                    <<"1.0.0">>;
+                Output ->
+                    Trimmed = string:trim(Output, both, "\n\r\t "),
+                    case Trimmed of
+                        [] -> <<"1.0.0">>;
+                        _ -> list_to_binary(Trimmed)
+                    end
+            end
     end.
 
 -spec extract_description_from_list([term()]) -> binary().
