@@ -146,16 +146,24 @@ get_include_paths(_State, HandlerPath) ->
     [AppRoot, IncludeDir, SrcDir].
 
 -spec parse_forms(string(), [string()]) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
-parse_forms(FilePath, IncludePaths) ->
-    %% Use epp to handle includes and macros
-    Options = [{includes, IncludePaths}],
-    case epp:parse_file(FilePath, Options) of
-        {ok, Forms} ->
-            {ok, Forms};
-        {error, Error} ->
-            {error, {parse_error, Error}};
-        {error, Error, _} ->
-            {error, {parse_error, Error}}
+parse_forms(FilePath, _IncludePaths) ->
+    %% Read file and parse - routes() function doesn't need includes
+    case file:read_file(FilePath) of
+        {ok, Binary} ->
+            Source = binary_to_list(Binary),
+            case erl_scan:string(Source) of
+                {ok, Tokens, _} ->
+                    case erl_parse:parse_form_list(Tokens) of
+                        {ok, Forms} ->
+                            {ok, Forms};
+                        {error, Error} ->
+                            {error, {parse_error, Error}}
+                    end;
+                {error, Error, _} ->
+                    {error, {scan_error, Error}}
+            end;
+        {error, Reason} ->
+            {error, {file_read_error, FilePath, Reason}}
     end.
 
 -spec convert_contracts_to_operations([rebar3_opapi_parser:contract()], [rebar3_opapi_parser:route()], [rebar3_opapi_parser:type_def()]) -> [map()].
