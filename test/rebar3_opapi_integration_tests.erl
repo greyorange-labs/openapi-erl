@@ -118,7 +118,8 @@ comprehensive_handler_end_to_end_test() ->
             %% Should use OpenAPI format {id} not :id
             PathStr = binary_to_list(Path),
             case string:find(PathStr, ":") of
-                nomatch -> ok;  % Good, no : found
+                % Good, no : found
+                nomatch -> ok;
                 _ -> ?assert(false, "Paths should use {id} format, not :id, got: " ++ PathStr)
             end
         end,
@@ -137,7 +138,8 @@ comprehensive_handler_end_to_end_test() ->
     lists:foreach(
         fun(SchemaName) ->
             case maps:is_key(SchemaName, Schemas) of
-                true -> ok;
+                true ->
+                    ok;
                 false ->
                     %% Try to find it with different capitalization
                     SchemaKeys = maps:keys(Schemas),
@@ -158,8 +160,10 @@ comprehensive_handler_end_to_end_test() ->
         fun(_Path, PathOps, _Acc) ->
             maps:fold(
                 fun(_Method, Op, _Acc2) ->
-                    ?assert(maps:is_key(<<"operationId">>, Op),
-                        "All operations should have operationId"),
+                    ?assert(
+                        maps:is_key(<<"operationId">>, Op),
+                        "All operations should have operationId"
+                    ),
                     OpId = maps:get(<<"operationId">>, Op),
                     ?assert(is_binary(OpId), "operationId should be binary"),
                     ?assert(byte_size(OpId) > 0, "operationId should not be empty")
@@ -213,7 +217,8 @@ generate_complete_openapi_doc_test() ->
     %% operationId is auto-generated (e.g., "getApiUsers")
     ?assert(maps:is_key(<<"operationId">>, GetOp), "Should have auto-generated operationId"),
     OpId = maps:get(<<"operationId">>, GetOp),
-    ?assert(is_binary(OpId)), ?assert(byte_size(OpId) > 0),
+    ?assert(is_binary(OpId)),
+    ?assert(byte_size(OpId) > 0),
     ?assertEqual([<<"Users">>], maps:get(<<"tags">>, GetOp)),
 
     %% Verify GET response has array of users
@@ -221,15 +226,17 @@ generate_complete_openapi_doc_test() ->
     ?assert(maps:is_key(<<"200">>, GetResponses)),
     GetResponse200 = maps:get(<<"200">>, GetResponses),
     %% Response may have atom or binary keys - check both
-    GetContent = case maps:is_key(<<"content">>, GetResponse200) of
-        true -> maps:get(<<"content">>, GetResponse200);
-        false -> maps:get(content, GetResponse200)
-    end,
+    GetContent =
+        case maps:is_key(<<"content">>, GetResponse200) of
+            true -> maps:get(<<"content">>, GetResponse200);
+            false -> maps:get(content, GetResponse200)
+        end,
     GetJsonContent = maps:get(<<"application/json">>, GetContent),
-    GetSchema = case maps:is_key(<<"schema">>, GetJsonContent) of
-        true -> maps:get(<<"schema">>, GetJsonContent);
-        false -> maps:get(schema, GetJsonContent)
-    end,
+    GetSchema =
+        case maps:is_key(<<"schema">>, GetJsonContent) of
+            true -> maps:get(<<"schema">>, GetJsonContent);
+            false -> maps:get(schema, GetJsonContent)
+        end,
     ?assertEqual(<<"array">>, maps:get(<<"type">>, GetSchema)),
     GetItems = maps:get(<<"items">>, GetSchema),
     ?assertEqual(<<"#/components/schemas/User">>, maps:get(<<"$ref">>, GetItems)),
@@ -240,34 +247,39 @@ generate_complete_openapi_doc_test() ->
     %% operationId is auto-generated (e.g., "postApiUsers")
     ?assert(maps:is_key(<<"operationId">>, PostOp), "Should have auto-generated operationId"),
     PostOpId = maps:get(<<"operationId">>, PostOp),
-    ?assert(is_binary(PostOpId)), ?assert(byte_size(PostOpId) > 0),
+    ?assert(is_binary(PostOpId)),
+    ?assert(byte_size(PostOpId) > 0),
 
     %% Verify POST requestBody uses CreateUserRequest type
     PostRequestBody = maps:get(<<"requestBody">>, PostOp),
-    PostReqContent = case maps:is_key(<<"content">>, PostRequestBody) of
-        true -> maps:get(<<"content">>, PostRequestBody);
-        false -> maps:get(content, PostRequestBody)
-    end,
+    PostReqContent =
+        case maps:is_key(<<"content">>, PostRequestBody) of
+            true -> maps:get(<<"content">>, PostRequestBody);
+            false -> maps:get(content, PostRequestBody)
+        end,
     PostReqJson = maps:get(<<"application/json">>, PostReqContent),
-    PostReqSchema = case maps:is_key(<<"schema">>, PostReqJson) of
-        true -> maps:get(<<"schema">>, PostReqJson);
-        false -> maps:get(schema, PostReqJson)
-    end,
+    PostReqSchema =
+        case maps:is_key(<<"schema">>, PostReqJson) of
+            true -> maps:get(<<"schema">>, PostReqJson);
+            false -> maps:get(schema, PostReqJson)
+        end,
     ?assertEqual(<<"#/components/schemas/CreateUserRequest">>, maps:get(<<"$ref">>, PostReqSchema)),
 
     %% Verify POST response uses User type
     PostResponses = maps:get(<<"responses">>, PostOp),
     ?assert(maps:is_key(<<"201">>, PostResponses)),
     PostResponse201 = maps:get(<<"201">>, PostResponses),
-    PostContent = case maps:is_key(<<"content">>, PostResponse201) of
-        true -> maps:get(<<"content">>, PostResponse201);
-        false -> maps:get(content, PostResponse201)
-    end,
+    PostContent =
+        case maps:is_key(<<"content">>, PostResponse201) of
+            true -> maps:get(<<"content">>, PostResponse201);
+            false -> maps:get(content, PostResponse201)
+        end,
     PostJsonContent = maps:get(<<"application/json">>, PostContent),
-    PostSchema = case maps:is_key(<<"schema">>, PostJsonContent) of
-        true -> maps:get(<<"schema">>, PostJsonContent);
-        false -> maps:get(schema, PostJsonContent)
-    end,
+    PostSchema =
+        case maps:is_key(<<"schema">>, PostJsonContent) of
+            true -> maps:get(<<"schema">>, PostJsonContent);
+            false -> maps:get(schema, PostJsonContent)
+        end,
     ?assertEqual(<<"#/components/schemas/User">>, maps:get(<<"$ref">>, PostSchema)),
 
     %% Verify GET /api/users/{user_id} operation
@@ -277,7 +289,8 @@ generate_complete_openapi_doc_test() ->
     %% operationId is auto-generated (e.g., "getApiUsersByUserId")
     ?assert(maps:is_key(<<"operationId">>, GetUserOp), "Should have auto-generated operationId"),
     GetUserOpId = maps:get(<<"operationId">>, GetUserOp),
-    ?assert(is_binary(GetUserOpId)), ?assert(byte_size(GetUserOpId) > 0),
+    ?assert(is_binary(GetUserOpId)),
+    ?assert(byte_size(GetUserOpId) > 0),
 
     %% Verify path parameter
     GetUserParams = maps:get(<<"parameters">>, GetUserOp),
@@ -309,7 +322,8 @@ generate_complete_openapi_doc_test() ->
     ?assert(lists:member(<<"id">>, UserRequired)),
     ?assert(lists:member(<<"name">>, UserRequired)),
     ?assert(lists:member(<<"email">>, UserRequired)),
-    ?assertNot(lists:member(<<"age">>, UserRequired)),  % age is optional
+    % age is optional
+    ?assertNot(lists:member(<<"age">>, UserRequired)),
 
     %% Verify UserRole enum (converted to oneOf for union types)
     UserRoleSchema = maps:get(<<"UserRole">>, Schemas),
@@ -366,7 +380,7 @@ validate_openapi_standard_test() ->
 
     %% Write to YAML file in project root for review (not in /tmp)
     OutputYamlFile = "generated_openapi_comprehensive.yaml",
-            case rebar3_opapi_prv_extract:write_openapi_file(OutputYamlFile, OpenAPIDoc) of
+    case rebar3_opapi_prv_extract:write_openapi_file(OutputYamlFile, OpenAPIDoc) of
         ok ->
             %% Verify file was created
             ?assert(filelib:is_file(OutputYamlFile), "YAML file should be created"),
@@ -396,7 +410,10 @@ validate_openapi_standard_test() ->
                             ?assert(true, "OpenAPI document passed redocly validation");
                         _ ->
                             io:format("Redocly validation failed (exit code: ~p)~nOutput:~n~s~n", [ExitCode, Output]),
-                            ?assert(false, io_lib:format("OpenAPI document failed redocly validation (exit code: ~p): ~s", [ExitCode, Output]))
+                            ?assert(
+                                false,
+                                io_lib:format("OpenAPI document failed redocly validation (exit code: ~p): ~s", [ExitCode, Output])
+                            )
                     end
             end;
         {error, Reason} ->
@@ -420,6 +437,6 @@ collect_port_output(Port, Acc, ExitCode) ->
     after 30000 ->
         %% Timeout - return what we have
         Output = binary_to_list(iolist_to_binary(lists:reverse(Acc))),
-        {Output, 1}  % Assume failure on timeout
+        % Assume failure on timeout
+        {Output, 1}
     end.
-
