@@ -110,11 +110,12 @@ extract_version_from_list([{vsn, Version} | _Rest], AppSrcPath, WorkspaceRoot) -
     case Version of
         {cmd, Cmd} ->
             %% Version is from command, execute it
-            CmdStr = case Cmd of
-                CmdList when is_list(CmdList) -> CmdList;
-                CmdBin when is_binary(CmdBin) -> binary_to_list(CmdBin);
-                _ -> ""
-            end,
+            CmdStr =
+                case Cmd of
+                    CmdList when is_list(CmdList) -> CmdList;
+                    CmdBin when is_binary(CmdBin) -> binary_to_list(CmdBin);
+                    _ -> ""
+                end,
             execute_version_cmd(CmdStr, AppSrcPath, WorkspaceRoot);
         VersionStr when is_list(VersionStr) ->
             list_to_binary(VersionStr);
@@ -126,23 +127,43 @@ extract_version_from_list([{vsn, Version} | _Rest], AppSrcPath, WorkspaceRoot) -
 extract_version_from_list([_ | Rest], AppSrcPath, WorkspaceRoot) ->
     extract_version_from_list(Rest, AppSrcPath, WorkspaceRoot).
 
+-spec resolve_relative_path(string(), string()) -> string().
+resolve_relative_path(Path, BaseDir) ->
+    %% Count ../ in the path
+    Parts = string:split(Path, "/", all),
+    {UpLevels, Remaining} = count_up_levels(Parts, 0, []),
+    %% Go up UpLevels from BaseDir
+    TargetDir = lists:foldl(fun(_, Acc) -> filename:dirname(Acc) end, BaseDir, lists:seq(1, UpLevels)),
+    %% Join remaining path
+    filename:join([TargetDir | Remaining]).
+
+-spec count_up_levels([string()], integer(), [string()]) -> {integer(), [string()]}.
+count_up_levels([".." | Rest], Count, _Acc) ->
+    count_up_levels(Rest, Count + 1, []);
+count_up_levels([Part | Rest], Count, Acc) when Part =/= "" ->
+    count_up_levels(Rest, Count, [Part | Acc]);
+count_up_levels([], Count, Acc) ->
+    {Count, lists:reverse(Acc)}.
+
 -spec execute_version_cmd(string(), string(), string() | undefined) -> binary().
 execute_version_cmd(Cmd, AppSrcPath, WorkspaceRoot) ->
-    %% Resolve command path relative to app.src file location
-    AppSrcDir = filename:dirname(AppSrcPath),
-    CmdPath = filename:absname(Cmd, AppSrcDir),
-
-    %% If workspace root is provided and command path is relative, try resolving from workspace root
+    %% Resolve command path - prefer workspace root if provided
     FinalCmdPath =
         case WorkspaceRoot of
             undefined ->
-                CmdPath;
+                %% Fallback to app.src relative
+                AppSrcDir = filename:dirname(AppSrcPath),
+                filename:absname(Cmd, AppSrcDir);
             Root when is_list(Root) ->
-                %% Try workspace root first, then fallback to app.src relative
-                WorkspaceCmdPath = filename:absname(Cmd, Root),
-                case filelib:is_file(WorkspaceCmdPath) of
-                    true -> WorkspaceCmdPath;
-                    false -> CmdPath
+                %% Resolve from workspace root (handles ../.. correctly)
+                case string:prefix(Cmd, "../") of
+                    nomatch ->
+                        %% Not a relative path, use as-is or resolve from root
+                        filename:absname(Cmd, Root);
+                    RelPath ->
+                        %% Handle ../.. paths by resolving from workspace root
+                        Resolved = resolve_relative_path(RelPath, Root),
+                        Resolved
                 end
         end,
 
