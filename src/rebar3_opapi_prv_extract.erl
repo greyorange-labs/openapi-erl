@@ -3,6 +3,7 @@
 
 -export([init/1, do/1, format_error/1]).
 
+
 -define(PROVIDER, extract).
 -define(DEPS, [{default, compile}]).
 
@@ -59,6 +60,8 @@ format_error({file_write_error, Path, Reason}) ->
     io_lib:format("Failed to write file ~s: ~p", [Path, Reason]);
 format_error({file_not_found, Path}) ->
     io_lib:format("Handler file not found: ~s", [Path]);
+format_error({parse_error, Reason}) ->
+    io_lib:format("Failed to parse handler file: ~p", [Reason]);
 format_error({extraction_error, Reason}) ->
     io_lib:format("Failed to extract contracts: ~p", [Reason]);
 format_error(Reason) ->
@@ -92,22 +95,121 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
         false ->
             {error, {file_not_found, HandlerPath}};
         true ->
-            %% For Phase 1: Stub implementation - just create empty OpenAPI doc
-            AppNameBin = case AppNameOpt of
-                undefined -> <<"API">>;
-                AppNameStr -> list_to_binary(AppNameStr)
-            end,
-            OpenAPIDoc = rebar3_opapi_builder:build([], AppNameBin),
-            
-            %% Write to file
-            case write_openapi_file(OutputPath, OpenAPIDoc) of
-                ok ->
-                    rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
-                    {ok, State};
+            %% Parse handler file to extract contracts, types, and routes
+            case rebar3_opapi_parser:parse_file(HandlerPath) of
+                {ok, {Contracts, Types}} ->
+                    %% Also extract routes from the parsed forms
+                    {ok, Forms} = parse_forms(HandlerPath),
+                    Routes = rebar3_opapi_parser:extract_routes(Forms),
+                    rebar_api:info("Found ~p contract(s), ~p type(s), ~p route(s)", 
+                        [length(Contracts), length(Types), length(Routes)]),
+                    
+                    %% Convert contracts and routes to operations
+                    Operations = convert_contracts_to_operations(Contracts, Routes, Types),
+                    
+                    %% Build OpenAPI document
+                    AppNameBin = case AppNameOpt of
+                        undefined -> <<"API">>;
+                        AppNameStr -> list_to_binary(AppNameStr)
+                    end,
+                    OpenAPIDoc = rebar3_opapi_builder:build(Operations, AppNameBin),
+                    
+                    %% Write to file
+                    case write_openapi_file(OutputPath, OpenAPIDoc) of
+                        ok ->
+                            rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
+                            {ok, State};
+                        {error, Reason} ->
+                            {error, {file_write_error, OutputPath, Reason}}
+                    end;
                 {error, Reason} ->
-                    {error, {file_write_error, OutputPath, Reason}}
+                    {error, {parse_error, Reason}}
             end
     end.
+
+-spec parse_forms(string()) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
+parse_forms(FilePath) ->
+    case file:read_file(FilePath) of
+        {ok, Binary} ->
+            Source = binary_to_list(Binary),
+            case erl_scan:string(Source) of
+                {ok, Tokens, _} ->
+                    case erl_parse:parse_form_list(Tokens) of
+                        {ok, Forms} ->
+                            {ok, Forms};
+                        {error, Error} ->
+                            {error, {parse_error, Error}}
+                    end;
+                {error, Error, _} ->
+                    {error, {scan_error, Error}}
+            end;
+        {error, Reason} ->
+            {error, {file_read_error, FilePath, Reason}}
+    end.
+
+-spec convert_contracts_to_operations([contract()], [route()], [type_def()]) -> [map()].
+convert_contracts_to_operations(Contracts, Routes, _Types) ->
+    %% Match contracts with routes by operation_id
+    ContractMap = maps:from_list(Contracts),
+    lists:foldl(
+        fun(Route, Acc) ->
+            OpId = maps:get(operation_id, Route),
+            case maps:get(OpId, ContractMap, undefined) of
+                undefined ->
+                    %% Route without contract - create basic operation
+                    Operation = #{
+                        operation_id => OpId,
+                        method => maps:get(method, Route),
+                        path => maps:get(path, Route),
+                        summary => <<>>,
+                        description => <<>>,
+                        tags => [],
+                        responses => #{<<"200">> => #{<<"description">> => <<"Success">>}}
+                    },
+                    [Operation | Acc];
+                ContractData ->
+                    %% Route with contract - build full operation
+                    Operation = build_operation_from_contract(Route, ContractData),
+                    [Operation | Acc]
+            end
+        end,
+        [],
+        Routes
+    ).
+
+-spec build_operation_from_contract(rebar3_opapi_parser:route(), map()) -> map().
+build_operation_from_contract(Route, Contract) ->
+    OpId = maps:get(operation_id, Route),
+    Method = maps:get(method, Route),
+    Path = maps:get(path, Route),
+    
+    %% Extract request body if present
+    RequestBody = case maps:get(request_body, Contract, undefined) of
+        undefined -> undefined;
+        ReqBody -> #{<<"content">> => #{
+            <<"application/json">> => #{
+                <<"schema">> => ReqBody
+            }
+        }}
+    end,
+    
+    %% Extract responses
+    Responses = case maps:get(responses, Contract, undefined) of
+        undefined -> #{<<"200">> => #{<<"description">> => <<"Success">>}};
+        RespMap -> RespMap
+    end,
+    
+    #{
+        operation_id => OpId,
+        method => Method,
+        path => Path,
+        summary => maps:get(summary, Contract, <<>>),
+        description => maps:get(description, Contract, <<>>),
+        tags => maps:get(tags, Contract, []),
+        request_body => RequestBody,
+        responses => Responses,
+        parameters => maps:get(parameters, Contract, [])
+    }.
 
 -spec write_openapi_file(string(), map()) -> ok | {error, term()}.
 write_openapi_file(OutputPath, OpenAPIDoc) ->
