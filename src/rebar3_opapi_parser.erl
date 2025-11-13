@@ -11,6 +11,7 @@
 
 -export([
     parse_file/1,
+    parse_file/2,
     extract_contracts/1,
     extract_types/1,
     extract_routes/1
@@ -26,26 +27,16 @@
 -spec parse_file(string(), [string()]) -> {ok, {[contract()], [type_def()]}} | {error, term()}.
 parse_file(FilePath) ->
     parse_file(FilePath, []).
-parse_file(FilePath, _IncludePaths) ->
-    %% Read file and parse - attributes and types don't need includes
-    case file:read_file(FilePath) of
-        {ok, Binary} ->
-            Source = binary_to_list(Binary),
-            case erl_scan:string(Source) of
-                {ok, Tokens, _} ->
-                    case erl_parse:parse_form_list(Tokens) of
-                        {ok, Forms} ->
-                            Contracts = extract_contracts(Forms),
-                            Types = extract_types(Forms),
-                            {ok, {Contracts, Types}};
-                        {error, Error} ->
-                            {error, {parse_error, Error}}
-                    end;
-                {error, Error, _} ->
-                    {error, {scan_error, Error}}
-            end;
-        {error, Reason} ->
-            {error, {file_read_error, FilePath, Reason}}
+parse_file(FilePath, IncludePaths) ->
+    %% Use epp:parse_file/2 to handle includes and parse forms
+    Options = [{includes, IncludePaths}],
+    case epp:parse_file(FilePath, Options) of
+        {ok, Forms} ->
+            Contracts = extract_contracts(Forms),
+            Types = extract_types(Forms),
+            {ok, {Contracts, Types}};
+        {error, Error} ->
+            {error, {parse_error, Error}}
     end.
 
 -spec extract_contracts([erl_parse:abstract_form()]) -> [contract()].

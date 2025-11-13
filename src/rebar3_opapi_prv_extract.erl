@@ -106,7 +106,13 @@ extract_and_generate(State, HandlerPath, OutputPath, AppNameOpt) ->
                     %% Also extract routes from the parsed forms
                     case parse_forms(HandlerPath, IncludePaths) of
                         {ok, Forms} ->
-                            Routes = rebar3_opapi_parser:extract_routes(Forms),
+                            Routes = try
+                                rebar3_opapi_parser:extract_routes(Forms)
+                            catch
+                                C:E ->
+                                    rebar_api:warn("Failed to extract routes: ~p:~p", [C, E]),
+                                    []
+                            end,
                             rebar_api:info("Found ~p contract(s), ~p type(s), ~p route(s)", 
                                 [length(Contracts), length(Types), length(Routes)]),
                             
@@ -146,24 +152,14 @@ get_include_paths(_State, HandlerPath) ->
     [AppRoot, IncludeDir, SrcDir].
 
 -spec parse_forms(string(), [string()]) -> {ok, [erl_parse:abstract_form()]} | {error, term()}.
-parse_forms(FilePath, _IncludePaths) ->
-    %% Read file and parse - routes() function doesn't need includes
-    case file:read_file(FilePath) of
-        {ok, Binary} ->
-            Source = binary_to_list(Binary),
-            case erl_scan:string(Source) of
-                {ok, Tokens, _} ->
-                    case erl_parse:parse_form_list(Tokens) of
-                        {ok, Forms} ->
-                            {ok, Forms};
-                        {error, Error} ->
-                            {error, {parse_error, Error}}
-                    end;
-                {error, Error, _} ->
-                    {error, {scan_error, Error}}
-            end;
-        {error, Reason} ->
-            {error, {file_read_error, FilePath, Reason}}
+parse_forms(FilePath, IncludePaths) ->
+    %% Use epp:parse_file/2 to handle includes and parse forms
+    Options = [{includes, IncludePaths}],
+    case epp:parse_file(FilePath, Options) of
+        {ok, Forms} ->
+            {ok, Forms};
+        {error, Error} ->
+            {error, {parse_error, Error}}
     end.
 
 -spec convert_contracts_to_operations([rebar3_opapi_parser:contract()], [rebar3_opapi_parser:route()], [rebar3_opapi_parser:type_def()]) -> [map()].
