@@ -142,12 +142,17 @@ extract_route_from_map({map, _Line, Fields}) ->
 extract_route_from_map(_) ->
     undefined.
 
--spec extract_routes_from_methods(binary(), map()) -> route() | undefined.
+-spec extract_routes_from_methods(binary(), term()) -> route() | undefined.
 extract_routes_from_methods(Path, MethodsMap) when is_map(MethodsMap) ->
     %% Extract first method and operation_id from map
     case maps:to_list(MethodsMap) of
-        [{Method, #{operation_id := OpId}} | _] ->
-            #{path => Path, method => Method, operation_id => OpId};
+        [{Method, OpMap} | _] when is_map(OpMap) ->
+            case maps:get(operation_id, OpMap, undefined) of
+                undefined ->
+                    undefined;
+                OpId ->
+                    #{path => Path, method => Method, operation_id => OpId}
+            end;
         _ ->
             undefined
     end;
