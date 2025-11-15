@@ -269,7 +269,7 @@ expand_media_type_schema(MediaTypeMeta, _Types) ->
 -spec type_ref_to_schema_ref(atom()) -> binary().
 type_ref_to_schema_ref(TypeName) ->
     %% Capitalize type name (user_id -> UserId)
-    CapitalizedName = rebar3_openapi_schema_converter:capitalize_type_name(TypeName),
+    CapitalizedName = gm_type_schema_converter:capitalize_type_name(TypeName),
     <<"#/components/schemas/", CapitalizedName/binary>>.
 
 %% @doc Check if an atom is a primitive Erlang type

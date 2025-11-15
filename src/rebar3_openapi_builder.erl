@@ -349,8 +349,8 @@ build_components(Types) ->
 
 -spec extract_schemas([type_def()]) -> map().
 extract_schemas(Types) ->
-    %% Use schema converter to transform Erlang types to OpenAPI schemas
-    rebar3_openapi_schema_converter:types_to_schemas(Types).
+    %% Use shared type converter library to transform Erlang types to OpenAPI schemas
+    gm_type_schema_converter:types_to_schemas(Types).
 
 -spec method_to_lowercase(binary() | list()) -> binary().
 method_to_lowercase(Method) when is_binary(Method) ->
