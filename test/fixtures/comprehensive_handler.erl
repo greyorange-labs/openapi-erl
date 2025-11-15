@@ -1,5 +1,5 @@
 -module(comprehensive_handler).
--behaviour(trails_handler).
+-compile(nowarn_unused_type).
 
 -export([trails/0]).
 
