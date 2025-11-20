@@ -69,6 +69,8 @@ format_error({internal_error, Class, Err}) ->
     io_lib:format("Internal error: ~p:~p", [Class, Err]);
 format_error({extraction_error, Reason}) ->
     io_lib:format("Failed to extract contracts: ~p", [Reason]);
+format_error({trails_call_error, ModuleName, Reason}) ->
+    io_lib:format("Failed to call ~p:trails/0: ~p", [ModuleName, Reason]);
 format_error(Reason) ->
     io_lib:format("~p", [Reason]).
 
@@ -101,48 +103,49 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
         true ->
             %% Get include paths from rebar state
             IncludePaths = get_include_paths(State, HandlerPath),
-            %% Parse handler file using new trails-based approach
+
+            %% Extract module name from handler file path
+            ModuleName = extract_module_name_from_path(HandlerPath),
+            rebar_api:info("  Module: ~p", [ModuleName]),
+
+            %% Parse handler file for type definitions (types are compile-time only)
             case parse_forms(HandlerPath, IncludePaths) of
                 {ok, Forms} ->
-                    %% Extract trails and types
-                    Trails =
-                        try
-                            rebar3_openapi_parser:extract_trails(Forms)
-                        catch
-                            C:E ->
-                                rebar_api:warn("Failed to extract trails: ~p:~p", [C, E]),
-                                []
-                        end,
-
                     Types = rebar3_openapi_parser:extract_types(Forms),
 
-                    rebar_api:info(
-                        "Found ~p trail(s), ~p type(s)",
-                        [length(Trails), length(Types)]
-                    ),
+                    %% Load module and call trails() directly instead of parsing
+                    case load_and_call_trails(ModuleName, State) of
+                        {ok, Trails} ->
+                            rebar_api:info(
+                                "Found ~p trail(s), ~p type(s)",
+                                [length(Trails), length(Types)]
+                            ),
 
-                    %% Expand trails metadata (type refs -> $refs)
-                    ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
+                            %% Expand trails metadata (type refs -> $refs)
+                            ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
 
-                    %% Find app.src file
-                    AppSrcPath = find_app_src(HandlerPath, AppName),
+                            %% Find app.src file
+                            AppSrcPath = find_app_src(HandlerPath, AppName),
 
-                    %% Get workspace root (project root directory)
-                    WorkspaceRoot = rebar_dir:root_dir(State),
+                            %% Get workspace root (project root directory)
+                            WorkspaceRoot = rebar_dir:root_dir(State),
 
-                    %% Build OpenAPI document from expanded trails
-                    AppNameBin = list_to_binary(AppName),
-                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(
-                        ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot
-                    ),
+                            %% Build OpenAPI document from expanded trails
+                            AppNameBin = list_to_binary(AppName),
+                            OpenAPIDoc = rebar3_openapi_builder:build_from_trails(
+                                ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot
+                            ),
 
-                    %% Write to file
-                    case write_openapi_file(OutputPath, OpenAPIDoc) of
-                        ok ->
-                            rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
-                            {ok, State};
+                            %% Write to file
+                            case write_openapi_file(OutputPath, OpenAPIDoc) of
+                                ok ->
+                                    rebar_api:info("SUCCESS: OpenAPI documentation written to ~s", [OutputPath]),
+                                    {ok, State};
+                                {error, Reason} ->
+                                    {error, {file_write_error, OutputPath, Reason}}
+                            end;
                         {error, Reason} ->
-                            {error, {file_write_error, OutputPath, Reason}}
+                            {error, {trails_call_error, ModuleName, Reason}}
                     end;
                 {error, Reason} ->
                     {error, {parse_error, Reason}}
@@ -200,6 +203,73 @@ find_app_root(Dir) ->
                     find_app_root(Parent)
             end
     end.
+
+-spec extract_module_name_from_path(string()) -> atom().
+extract_module_name_from_path(HandlerPath) ->
+    %% Extract module name from file path
+    %% e.g., "apps/pick/src/interfaces/in/pick_http_handler.erl" -> pick_http_handler
+    BaseName = filename:basename(HandlerPath, ".erl"),
+    list_to_atom(BaseName).
+
+-spec load_and_call_trails(atom(), rebar_state:t()) -> {ok, [term()]} | {error, term()}.
+load_and_call_trails(ModuleName, State) ->
+    try
+        %% Ensure module is compiled and in code path
+        %% First try to ensure loaded
+        case code:ensure_loaded(ModuleName) of
+            {module, ModuleName} ->
+                ok;
+            {error, nofile} ->
+                %% Module not found, need to compile first
+                %% Get code paths from rebar state
+                CodePaths = get_code_paths(State),
+                add_code_paths(CodePaths),
+                %% Try loading again
+                case code:ensure_loaded(ModuleName) of
+                    {module, ModuleName} ->
+                        ok;
+                    {error, LoadReason} ->
+                        throw({module_load_error, LoadReason})
+                end;
+            {error, LoadReason2} ->
+                throw({module_load_error, LoadReason2})
+        end,
+
+        %% Check if trails/0 is exported
+        case erlang:function_exported(ModuleName, trails, 0) of
+            true ->
+                %% Call trails() function directly
+                Trails = ModuleName:trails(),
+                {ok, Trails};
+            false ->
+                {error, "trails/0 is not exported from " ++ atom_to_list(ModuleName)}
+        end
+    catch
+        _:Reason ->
+            {error, Reason}
+    end.
+
+-spec get_code_paths(rebar_state:t()) -> [string()].
+get_code_paths(State) ->
+    %% Get all code paths from rebar state
+    %% This includes _build/*/lib/*/ebin paths
+    AppsPaths = rebar_state:code_paths(State, all_deps),
+    AppSrcPaths = rebar_state:code_paths(State, all_src),
+    AppsPaths ++ AppSrcPaths.
+
+-spec add_code_paths([string()]) -> ok.
+add_code_paths(CodePaths) ->
+    lists:foreach(
+        fun(Path) ->
+            case filelib:is_dir(Path) of
+                true ->
+                    code:add_patha(Path);
+                false ->
+                    ok
+            end
+        end,
+        CodePaths
+    ).
 
 -spec get_include_paths(rebar_state:t(), string()) -> [string()].
 get_include_paths(_State, HandlerPath) ->

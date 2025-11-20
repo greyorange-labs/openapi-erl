@@ -61,9 +61,19 @@ expand_trails(Trails, Types) ->
 
 %% @doc Expand a single trail
 -spec expand_trail(trail(), [type_def()]) -> expanded_trail().
-expand_trail(#{path := Path, metadata := Metadata} = Trail, Types) ->
+expand_trail(Trail, Types) ->
+    %% trails:trail() returns a map with path_match or path key
+    Path = case maps:find(path, Trail) of
+        {ok, P} -> P;
+        error ->
+            case maps:find(path_match, Trail) of
+                {ok, PM} -> list_to_binary(PM);
+                error -> throw({missing_path_key, Trail})
+            end
+    end,
+    Metadata = maps:get(metadata, Trail),
     ExpandedMetadata = expand_metadata(Path, Metadata, Types),
-    Trail#{metadata => ExpandedMetadata}.
+    Trail#{metadata => ExpandedMetadata, path => Path}.
 
 %% @doc Expand metadata for all methods in a trail
 -spec expand_metadata(binary(), map(), [type_def()]) -> map().

@@ -178,9 +178,9 @@ components:
 
 ```bash
 rebar3 openapi extract \
-  --handler path/to/handler.erl \
+  --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl \
   --output openapi.yaml \
-  --app MyApp
+  --app butler_shared
 ```
 
 **Options:**

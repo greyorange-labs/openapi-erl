@@ -31,14 +31,17 @@
 simple_handler_end_to_end_test() ->
     %% Input: Simple handler fixture
     FixturePath = "test/fixtures/simple_handler.erl",
+    ModuleName = simple_handler,
 
-    %% Step 1: Parse handler file
+    %% Step 1: Parse handler file for types (types are compile-time only)
     IncludePaths = [{includes, []}, {macros, []}],
     {ok, Forms} = epp:parse_file(FixturePath, IncludePaths),
 
-    %% Step 2: Extract trails and types
-    Trails = rebar3_openapi_parser:extract_trails(Forms),
+    %% Step 2: Extract types and call trails() directly
     Types = rebar3_openapi_parser:extract_types(Forms),
+
+    %% Compile and load handler module, then call trails()
+    {ok, Trails} = compile_and_call_trails(FixturePath, ModuleName),
 
     %% Assert: Should extract trails and types
     ?assert(length(Trails) > 0, "Should extract at least one trail"),
@@ -78,14 +81,17 @@ simple_handler_end_to_end_test() ->
 comprehensive_handler_end_to_end_test() ->
     %% Input: Comprehensive handler fixture
     FixturePath = "test/fixtures/comprehensive_handler.erl",
+    ModuleName = comprehensive_handler,
 
-    %% Step 1: Parse handler file
+    %% Step 1: Parse handler file for types (types are compile-time only)
     IncludePaths = [{includes, []}, {macros, []}],
     {ok, Forms} = epp:parse_file(FixturePath, IncludePaths),
 
-    %% Step 2: Extract trails and types
-    Trails = rebar3_openapi_parser:extract_trails(Forms),
+    %% Step 2: Extract types and call trails() directly
     Types = rebar3_openapi_parser:extract_types(Forms),
+
+    %% Compile and load handler module, then call trails()
+    {ok, Trails} = compile_and_call_trails(FixturePath, ModuleName),
 
     %% Assert: Should extract multiple trails and types
     ?assert(length(Trails) > 0, "Should extract trails"),
@@ -186,12 +192,15 @@ comprehensive_handler_end_to_end_test() ->
 generate_complete_openapi_doc_test() ->
     %% Input: Handler with type references
     FixturePath = "test/fixtures/handler_with_types.erl",
+    ModuleName = handler_with_types,
 
-    %% Parse and process handler
+    %% Parse handler for types (types are compile-time only)
     IncludePaths = [{includes, []}, {macros, []}],
     {ok, Forms} = epp:parse_file(FixturePath, IncludePaths),
-    Trails = rebar3_openapi_parser:extract_trails(Forms),
     Types = rebar3_openapi_parser:extract_types(Forms),
+
+    %% Compile and load handler module, then call trails()
+    {ok, Trails} = compile_and_call_trails(FixturePath, ModuleName),
     ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
 
     %% Generate OpenAPI document
@@ -360,12 +369,15 @@ generate_complete_openapi_doc_test() ->
 validate_openapi_standard_test() ->
     %% Input: Comprehensive handler with all API combinations
     FixturePath = "test/fixtures/comprehensive_handler.erl",
+    ModuleName = comprehensive_handler,
 
-    %% Parse and process handler
+    %% Parse handler for types (types are compile-time only)
     IncludePaths = [{includes, []}, {macros, []}],
     {ok, Forms} = epp:parse_file(FixturePath, IncludePaths),
-    Trails = rebar3_openapi_parser:extract_trails(Forms),
     Types = rebar3_openapi_parser:extract_types(Forms),
+
+    %% Compile and load handler module, then call trails()
+    {ok, Trails} = compile_and_call_trails(FixturePath, ModuleName),
     ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
 
     %% Generate OpenAPI document
@@ -421,6 +433,85 @@ validate_openapi_standard_test() ->
     end,
     %% Teardown: Clean up generated file
     file:delete(OutputYamlFile).
+
+%% Helper function to compile handler module and call trails()
+-spec compile_and_call_trails(string(), atom()) -> {ok, [term()]} | {error, term()}.
+compile_and_call_trails(FixturePath, ModuleName) ->
+    try
+        %% Use _build directory for compilation
+        BaseDir = filename:absname("."),
+        OutDir = filename:join([BaseDir, "_build", "test", "lib", "rebar3_openapi", "test", "ebin"]),
+        filelib:ensure_dir(filename:join([OutDir, "dummy"])),
+
+        %% Get trails library ebin path from rebar3's test profile
+        TrailsEbin = filename:join([BaseDir, "_build", "test", "lib", "trails", "ebin"]),
+
+        %% Add include paths
+        IncludePaths = [
+            {i, filename:join([BaseDir, "test", "fixtures"])},
+            {i, BaseDir}
+        ],
+
+        %% Add trails ebin to include paths for compilation
+        %% Also add it to code path so trails module is available
+        true = code:add_patha(TrailsEbin),
+
+        %% Compile options
+        CompileOpts = [
+            {outdir, OutDir},
+            return_errors
+        ] ++ IncludePaths,
+
+        %% Compile the handler file
+        case compile:file(FixturePath, CompileOpts) of
+            {ok, _Module} ->
+                ok;
+            {ok, _Module, _Bin} ->
+                ok;
+            {ok, _Module, _Bin, _Warnings} ->
+                ok;
+            {error, Errors, _Warnings} ->
+                throw({compile_error, Errors});
+            Other ->
+                throw({compile_error, Other})
+        end,
+
+        %% Add output directory to code path
+        true = code:add_patha(OutDir),
+
+        %% Load the module (force reload if already loaded)
+        case code:soft_purge(ModuleName) of
+            true -> ok;
+            false -> ok
+        end,
+        code:delete(ModuleName),
+        code:purge(ModuleName),
+
+        %% Load the newly compiled module
+        case code:load_abs(filename:join([OutDir, atom_to_list(ModuleName)])) of
+            {module, ModuleName} ->
+                ok;
+            {error, LoadErrReason} ->
+                %% Try ensure_loaded as fallback
+                case code:ensure_loaded(ModuleName) of
+                    {module, ModuleName} -> ok;
+                    {error, EnsureErrReason} -> throw({module_load_error, LoadErrReason, EnsureErrReason})
+                end
+        end,
+
+        %% Check if trails/0 is exported
+        case erlang:function_exported(ModuleName, trails, 0) of
+            true ->
+                %% Call trails() function directly
+                Trails = ModuleName:trails(),
+                {ok, Trails};
+            false ->
+                {error, "trails/0 is not exported from " ++ atom_to_list(ModuleName)}
+        end
+    catch
+        _:ErrorReason ->
+            {error, ErrorReason}
+    end.
 
 %% Helper function to collect output from a port
 -spec collect_port_output(port(), [binary()], integer()) -> {string(), integer()}.
