@@ -76,10 +76,11 @@ extract_value({tuple, _Line, Elements}) ->
 extract_value({map, _Line1, Fields}) ->
     maps:from_list(
         lists:map(
-            fun({map_field_assoc, _Line2, KeyExpr, ValueExpr}) ->
-                {extract_value(KeyExpr), extract_value(ValueExpr)};
-            ({map_field_exact, _Line2, KeyExpr, ValueExpr}) ->
-                {extract_value(KeyExpr), extract_value(ValueExpr)}
+            fun
+                ({map_field_assoc, _Line2, KeyExpr, ValueExpr}) ->
+                    {extract_value(KeyExpr), extract_value(ValueExpr)};
+                ({map_field_exact, _Line2, KeyExpr, ValueExpr}) ->
+                    {extract_value(KeyExpr), extract_value(ValueExpr)}
             end,
             Fields
         )
@@ -91,10 +92,11 @@ extract_value(_) ->
 extract_binary(Elements) ->
     list_to_binary(
         lists:map(
-            fun({bin_element, _Line, {string, _Line2, String}, default, default}) ->
-                String;
-            ({bin_element, _Line, {integer, _Line2, Int}, default, default}) ->
-                Int
+            fun
+                ({bin_element, _Line, {string, _Line2, String}, default, default}) ->
+                    String;
+                ({bin_element, _Line, {integer, _Line2, Int}, default, default}) ->
+                    Int
             end,
             Elements
         )
@@ -144,8 +146,10 @@ extract_single_trail({call, _Line1, {remote, _Line2, {atom, _Line3, trails}, {at
             Options = extract_value(OptionsExpr),
             Metadata = extract_value(MetadataExpr),
             case {Path, Handler} of
-                {undefined, _} -> undefined;
-                {_, undefined} -> undefined;
+                {undefined, _} ->
+                    undefined;
+                {_, undefined} ->
+                    undefined;
                 {PathBin, HandlerAtom} ->
                     #{
                         path => PathBin,
@@ -171,4 +175,3 @@ extract_single_trail(_) ->
     options => map() | list(),
     metadata => map()
 }.
-

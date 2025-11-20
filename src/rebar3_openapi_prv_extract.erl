@@ -3,7 +3,6 @@
 
 -export([init/1, do/1, format_error/1, write_openapi_file/2]).
 
-
 -define(PROVIDER, extract).
 -define(DEPS, [{default, compile}]).
 
@@ -19,7 +18,8 @@ init(State) ->
         {namespace, openapi},
         {bare, true},
         {deps, ?DEPS},
-        {example, "rebar3 openapi extract --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl --output openapi.yaml"},
+        {example,
+            "rebar3 openapi extract --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl --output openapi.yaml"},
         {short_desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
         {desc, "Extract OpenAPI 3.0.x documentation from Erlang handler modules"},
         {opts, [
@@ -105,18 +105,21 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
             case parse_forms(HandlerPath, IncludePaths) of
                 {ok, Forms} ->
                     %% Extract trails and types
-                    Trails = try
-                        rebar3_openapi_parser:extract_trails(Forms)
-                    catch
-                        C:E ->
-                            rebar_api:warn("Failed to extract trails: ~p:~p", [C, E]),
-                            []
-                    end,
+                    Trails =
+                        try
+                            rebar3_openapi_parser:extract_trails(Forms)
+                        catch
+                            C:E ->
+                                rebar_api:warn("Failed to extract trails: ~p:~p", [C, E]),
+                                []
+                        end,
 
                     Types = rebar3_openapi_parser:extract_types(Forms),
 
-                    rebar_api:info("Found ~p trail(s), ~p type(s)",
-                        [length(Trails), length(Types)]),
+                    rebar_api:info(
+                        "Found ~p trail(s), ~p type(s)",
+                        [length(Trails), length(Types)]
+                    ),
 
                     %% Expand trails metadata (type refs -> $refs)
                     ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
@@ -129,7 +132,9 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
 
                     %% Build OpenAPI document from expanded trails
                     AppNameBin = list_to_binary(AppName),
-                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot),
+                    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(
+                        ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot
+                    ),
 
                     %% Write to file
                     case write_openapi_file(OutputPath, OpenAPIDoc) of
@@ -151,10 +156,12 @@ find_app_src(HandlerPath, AppName) ->
     %% We need: apps/butler_shared
     %% Strategy: Find the directory that contains "src" subdirectory
     %% Make path absolute first
-    AbsHandlerPath = case filelib:is_file(HandlerPath) of
-        true -> filename:absname(HandlerPath);
-        false -> HandlerPath  % Keep as-is if file doesn't exist (shouldn't happen)
-    end,
+    AbsHandlerPath =
+        case filelib:is_file(HandlerPath) of
+            true -> filename:absname(HandlerPath);
+            % Keep as-is if file doesn't exist (shouldn't happen)
+            false -> HandlerPath
+        end,
     HandlerDir = filename:dirname(AbsHandlerPath),
     AppRoot = find_app_root(HandlerDir),
 

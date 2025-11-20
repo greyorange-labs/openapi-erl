@@ -59,7 +59,8 @@ expand_parameter_with_type_ref_test() ->
         name => <<"id">>,
         in => <<"path">>,
         required => true,
-        schema => user_id  % Type reference as atom
+        % Type reference as atom
+        schema => user_id
     },
 
     Types = [{user_id, {type, 1, binary, []}}],
@@ -92,7 +93,8 @@ expand_request_body_with_type_ref_test() ->
         required => true,
         content => #{
             <<"application/json">> => #{
-                schema => user  % Type reference
+                % Type reference
+                schema => user
             }
         }
     },
@@ -258,4 +260,3 @@ expand_complete_trail_test() ->
     PutJsonContent = maps:get(<<"application/json">>, PutContent),
     PutReqSchema = maps:get(schema, PutJsonContent),
     ?assertEqual(<<"#/components/schemas/User">>, maps:get(<<"$ref">>, PutReqSchema)).
-

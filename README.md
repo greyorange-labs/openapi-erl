@@ -32,6 +32,7 @@ Add the plugin to your `rebar.config`:
 ### 1. Define Types
 
 In your handler module, define Erlang types:
+`gm_http_handler` is the root handler for all routes.
 
 ```erlang
 -module(user_handler).
@@ -55,7 +56,7 @@ Implement the `trails/0` callback with type references:
 ```erlang
 trails() ->
     [
-        trails:trail("/api/users/:id", user_handler, [], #{
+        trails:trail("/api/users/:id", gm_http_handler, [], #{
             get => #{
                 tags => [<<"users">>],
                 description => <<"Get user by ID">>,

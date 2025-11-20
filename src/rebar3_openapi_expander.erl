@@ -36,14 +36,16 @@
     path => binary(),
     handler => atom(),
     options => map() | list(),
-    metadata => map()  % Map of method => operation_metadata
+    % Map of method => operation_metadata
+    metadata => map()
 }.
 
 -type expanded_trail() :: #{
     path => binary(),
     handler => atom(),
     options => map() | list(),
-    metadata => map()  % Expanded metadata with $refs
+    % Expanded metadata with $refs
+    metadata => map()
 }.
 
 -type type_def() :: {atom(), erl_parse:abstract_type()}.
@@ -67,10 +69,11 @@ expand_trail(#{path := Path, metadata := Metadata} = Trail, Types) ->
 -spec expand_metadata(binary(), map(), [type_def()]) -> map().
 expand_metadata(Path, Metadata, Types) ->
     maps:map(
-        fun(Method, OperationMeta) when is_atom(Method) ->
-            expand_operation(Path, Method, OperationMeta, Types);
-           (_, Value) ->
-            Value
+        fun
+            (Method, OperationMeta) when is_atom(Method) ->
+                expand_operation(Path, Method, OperationMeta, Types);
+            (_, Value) ->
+                Value
         end,
         Metadata
     ).
@@ -79,31 +82,35 @@ expand_metadata(Path, Metadata, Types) ->
 -spec expand_operation(binary(), atom(), map(), [type_def()]) -> map().
 expand_operation(Path, Method, OperationMeta, Types) ->
     %% 1. Generate operationId if not present
-    OperationId = case maps:get(operationId, OperationMeta, undefined) of
-        undefined -> generate_operation_id(Path, Method);
-        ExistingId -> ExistingId
-    end,
+    OperationId =
+        case maps:get(operationId, OperationMeta, undefined) of
+            undefined -> generate_operation_id(Path, Method);
+            ExistingId -> ExistingId
+        end,
 
     %% 2. Start with existing metadata + operationId
     BaseMeta = OperationMeta#{operationId => OperationId},
 
     %% 3. Expand parameters if present
-    Meta1 = case maps:get(parameters, BaseMeta, undefined) of
-        undefined -> BaseMeta;
-        Params -> BaseMeta#{parameters => expand_parameters(Params, Types)}
-    end,
+    Meta1 =
+        case maps:get(parameters, BaseMeta, undefined) of
+            undefined -> BaseMeta;
+            Params -> BaseMeta#{parameters => expand_parameters(Params, Types)}
+        end,
 
     %% 4. Expand requestBody if present
-    Meta2 = case maps:get(requestBody, Meta1, undefined) of
-        undefined -> Meta1;
-        ReqBody -> Meta1#{requestBody => expand_request_body(ReqBody, Types)}
-    end,
+    Meta2 =
+        case maps:get(requestBody, Meta1, undefined) of
+            undefined -> Meta1;
+            ReqBody -> Meta1#{requestBody => expand_request_body(ReqBody, Types)}
+        end,
 
     %% 5. Expand responses if present
-    Meta3 = case maps:get(responses, Meta2, undefined) of
-        undefined -> Meta2;
-        Responses -> Meta2#{responses => expand_responses(Responses, Types)}
-    end,
+    Meta3 =
+        case maps:get(responses, Meta2, undefined) of
+            undefined -> Meta2;
+            Responses -> Meta2#{responses => expand_responses(Responses, Types)}
+        end,
 
     Meta3.
 
@@ -143,7 +150,8 @@ process_path_segment(Segment) ->
 
 %% @doc Capitalize first letter of a binary
 -spec capitalize_first(binary()) -> binary().
-capitalize_first(<<>>) -> <<>>;
+capitalize_first(<<>>) ->
+    <<>>;
 capitalize_first(<<First:8, Rest/binary>>) when First >= $a, First =< $z ->
     <<(First - 32):8, Rest/binary>>;
 capitalize_first(Bin) ->
@@ -221,27 +229,30 @@ expand_response(Response, _Types) ->
 -spec expand_media_type_schema(map(), [type_def()]) -> map().
 expand_media_type_schema(#{schema := {array, ItemType}} = MediaTypeMeta, Types) when is_atom(ItemType) ->
     %% Array type reference - expand to OpenAPI array schema
-    ItemsSchema = case is_primitive_type(ItemType) of
-        true ->
-            %% Primitive type - use inline schema
-            primitive_type_to_schema(ItemType);
-        false ->
-            %% Check if it's a defined type in Types
-            case lists:keyfind(ItemType, 1, Types) of
-                {ItemType, _TypeDef} ->
-                    %% User-defined type - use $ref
-                    ItemRef = type_ref_to_schema_ref(ItemType),
-                    #{<<"$ref">> => ItemRef};
-                false ->
-                    %% Unknown type - assume it's a user-defined type and create $ref
-                    ItemRef = type_ref_to_schema_ref(ItemType),
-                    #{<<"$ref">> => ItemRef}
-            end
-    end,
-    MediaTypeMeta#{schema => #{
-        <<"type">> => <<"array">>,
-        <<"items">> => ItemsSchema
-    }};
+    ItemsSchema =
+        case is_primitive_type(ItemType) of
+            true ->
+                %% Primitive type - use inline schema
+                primitive_type_to_schema(ItemType);
+            false ->
+                %% Check if it's a defined type in Types
+                case lists:keyfind(ItemType, 1, Types) of
+                    {ItemType, _TypeDef} ->
+                        %% User-defined type - use $ref
+                        ItemRef = type_ref_to_schema_ref(ItemType),
+                        #{<<"$ref">> => ItemRef};
+                    false ->
+                        %% Unknown type - assume it's a user-defined type and create $ref
+                        ItemRef = type_ref_to_schema_ref(ItemType),
+                        #{<<"$ref">> => ItemRef}
+                end
+        end,
+    MediaTypeMeta#{
+        schema => #{
+            <<"type">> => <<"array">>,
+            <<"items">> => ItemsSchema
+        }
+    };
 expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, Types) when is_atom(TypeRef) ->
     %% Check if it's a primitive type or a user-defined type
     case is_primitive_type(TypeRef) of
@@ -297,4 +308,3 @@ primitive_type_to_schema(boolean) ->
 primitive_type_to_schema(_) ->
     %% Fallback for unknown primitive types
     #{<<"type">> => <<"string">>}.
-

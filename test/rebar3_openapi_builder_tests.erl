@@ -96,10 +96,11 @@ build_components_with_schemas_test() ->
     %% Input: Type definitions
     Types = [
         {user_id, {type, 1, binary, []}},
-        {user, {type, 1, map, [
-            {type, 1, map_field_exact, [{atom, 1, id}, {user_type, 1, user_id, []}]},
-            {type, 1, map_field_exact, [{atom, 1, name}, {type, 1, binary, []}]}
-        ]}}
+        {user,
+            {type, 1, map, [
+                {type, 1, map_field_exact, [{atom, 1, id}, {user_type, 1, user_id, []}]},
+                {type, 1, map_field_exact, [{atom, 1, name}, {type, 1, binary, []}]}
+            ]}}
     ],
 
     %% Execute
@@ -178,9 +179,10 @@ build_complete_openapi_doc_test() ->
     ],
 
     Types = [
-        {user, {type, 1, map, [
-            {type, 1, map_field_exact, [{atom, 1, name}, {type, 1, binary, []}]}
-        ]}}
+        {user,
+            {type, 1, map, [
+                {type, 1, map_field_exact, [{atom, 1, name}, {type, 1, binary, []}]}
+            ]}}
     ],
 
     AppName = <<"TestAPI">>,
@@ -293,4 +295,3 @@ build_complete_doc_with_app_src_test() ->
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),
     ?assert(maps:is_key(<<"paths">>, Doc)),
     ?assert(maps:is_key(<<"components">>, Doc)).
-
