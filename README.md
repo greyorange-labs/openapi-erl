@@ -188,6 +188,47 @@ rebar3 openapi extract \
 - `--output` (required): Output file path (.yaml or .json)
 - `--app` (optional): Application name for metadata
 
+### Handler Generation
+
+Generate a template HTTP handler module with example routes to get started quickly:
+
+```bash
+rebar3 openapi generate_handler --app pick
+```
+
+This command generates a handler module at:
+```
+apps/pick/src/interfaces/in/pick_http_handler.erl
+```
+
+**What's Generated:**
+- Module with proper compile directives (`-compile(nowarn_unused_type)`, `-compile({parse_transform, gm_schema_extract_pt})`)
+- Include directive for common headers (`-include("src/gm_common.hrl")`)
+- Export list with `start_handlers/0`, `trails/0`, and `handle_request/3`
+- Type definitions section with TODO comments and examples
+- `trails/0` function with three example routes:
+  - **GET** `/api/items/:id` - Retrieve resource by ID
+  - **POST** `/api/items` - Create new resource
+  - **PUT** `/api/items/:id` - Update existing resource
+- `handle_request/3` function with default 501 response
+- Helpful comments throughout for developers
+
+**After Generation:**
+1. Customize the route paths and metadata to match your API
+2. Define your type definitions in the Type Definitions section
+3. Replace `binary` schema references with your actual types
+4. Implement the `handle_request/3` function clauses for each operation
+
+**Example:**
+```bash
+# Generate handler for 'pick' app
+rebar3 openapi generate_handler --app pick
+
+# Generated file: apps/pick/src/interfaces/in/pick_http_handler.erl
+```
+
+**Note:** The command will fail if the target file already exists. Ensure the app directory structure exists or the command will create the necessary directories.
+
 ### Type References
 
 Use atom type names in metadata:
