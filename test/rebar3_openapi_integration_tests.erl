@@ -457,10 +457,11 @@ compile_and_call_trails(FixturePath, ModuleName) ->
         true = code:add_patha(TrailsEbin),
 
         %% Compile options
-        CompileOpts = [
-            {outdir, OutDir},
-            return_errors
-        ] ++ IncludePaths,
+        CompileOpts =
+            [
+                {outdir, OutDir},
+                return_errors
+            ] ++ IncludePaths,
 
         %% Compile the handler file
         case compile:file(FixturePath, CompileOpts) of
