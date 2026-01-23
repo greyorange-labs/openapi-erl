@@ -35,12 +35,13 @@ do(State) ->
     try
         {Args, _} = rebar_state:command_parsed_args(State),
 
-        HandlerPath = proplists:get_value(handler, Args),
+        Handler = proplists:get_value(handler, Args),
         OutputPath = proplists:get_value(output, Args),
         AppName = proplists:get_value(app, Args),
 
-        case validate_args(HandlerPath, OutputPath, AppName) of
+        case validate_args(Handler, OutputPath, AppName) of
             ok ->
+                HandlerPath = handler_path(Handler, AppName),
                 extract_and_generate(State, HandlerPath, OutputPath, AppName);
             {error, Reason} ->
                 {error, format_error(Reason)}
@@ -50,6 +51,12 @@ do(State) ->
             rebar_api:error("openapi extract failed: ~p:~p", [Class, Err]),
             rebar_api:error("Stack trace: ~p", [Stack]),
             {error, format_error({internal_error, Class, Err})}
+    end.
+
+handler_path(Handler, AppName) ->
+    case filename:extension(Handler) of
+        "*.erl" -> Handler;
+        _ModNameString -> "apps/" ++ AppName ++ "/src/interfaces/in/" ++ Handler ++ ".erl"
     end.
 
 -spec format_error(any()) -> iolist().
@@ -245,7 +252,9 @@ load_and_call_trails(ModuleName, State) ->
                 {error, "trails/0 is not exported from " ++ atom_to_list(ModuleName)}
         end
     catch
-        _:Reason ->
+        Class:Reason:Stacktrace ->
+            rebar_api:error("Failed to call trails/0: ~p:~p", [Class, Reason]),
+            rebar_api:error("Stacktrace: ~p", [Stacktrace]),
             {error, Reason}
     end.
 
@@ -334,7 +343,9 @@ write_yaml_file(FilePath, Doc) ->
                 {error, {file_write_error, TmpJSONFile, WriteReason}}
         end
     catch
-        Class:ErrReason ->
+        Class:ErrReason:Stack ->
+            rebar_api:error("Failed to write YAML file: ~p:~p", [Class, ErrReason]),
+            rebar_api:error("Stack trace: ~p", [Stack]),
             {error, {Class, ErrReason}}
     end.
 
@@ -365,7 +376,9 @@ write_json_file(FilePath, Doc) ->
         JSON = jsx:encode(OrderedDoc),
         file:write_file(FilePath, JSON)
     catch
-        Class:ErrReason ->
+        Class:ErrReason:Stack ->
+            rebar_api:error("Failed to write YAML file: ~p:~p", [Class, ErrReason]),
+            rebar_api:error("Stack trace: ~p", [Stack]),
             {error, {Class, ErrReason}}
     end.
 
