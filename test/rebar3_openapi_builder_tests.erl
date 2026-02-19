@@ -295,3 +295,74 @@ build_complete_doc_with_app_src_test() ->
     ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, Doc)),
     ?assert(maps:is_key(<<"paths">>, Doc)),
     ?assert(maps:is_key(<<"components">>, Doc)).
+
+%%%===================================================================
+%%% Test 7: Operation-level metadata passthrough
+%%%===================================================================
+
+build_paths_deprecated_operation_test() ->
+    Trails = [
+        #{
+            path => <<"/api/old">>,
+            handler => old_handler,
+            options => #{},
+            metadata => #{
+                get => #{
+                    operationId => <<"getOld">>,
+                    deprecated => true,
+                    responses => #{
+                        <<"200">> => #{description => <<"Success">>}
+                    }
+                }
+            }
+        }
+    ],
+    Paths = rebar3_openapi_builder:build_paths_from_trails(Trails),
+    GetOp = maps:get(<<"get">>, maps:get(<<"/api/old">>, Paths)),
+    ?assertEqual(true, maps:get(<<"deprecated">>, GetOp)).
+
+build_paths_security_operation_test() ->
+    Trails = [
+        #{
+            path => <<"/api/secure">>,
+            handler => secure_handler,
+            options => #{},
+            metadata => #{
+                get => #{
+                    operationId => <<"getSecure">>,
+                    security => [#{<<"bearerAuth">> => []}],
+                    responses => #{
+                        <<"200">> => #{description => <<"Success">>}
+                    }
+                }
+            }
+        }
+    ],
+    Paths = rebar3_openapi_builder:build_paths_from_trails(Trails),
+    GetOp = maps:get(<<"get">>, maps:get(<<"/api/secure">>, Paths)),
+    ?assertEqual([#{<<"bearerAuth">> => []}], maps:get(<<"security">>, GetOp)).
+
+build_paths_external_docs_operation_test() ->
+    Trails = [
+        #{
+            path => <<"/api/docs">>,
+            handler => docs_handler,
+            options => #{},
+            metadata => #{
+                get => #{
+                    operationId => <<"getDocs">>,
+                    externalDocs => #{
+                        <<"description">> => <<"More info">>,
+                        <<"url">> => <<"https://example.com/docs">>
+                    },
+                    responses => #{
+                        <<"200">> => #{description => <<"Success">>}
+                    }
+                }
+            }
+        }
+    ],
+    Paths = rebar3_openapi_builder:build_paths_from_trails(Trails),
+    GetOp = maps:get(<<"get">>, maps:get(<<"/api/docs">>, Paths)),
+    ExternalDocs = maps:get(<<"externalDocs">>, GetOp),
+    ?assertEqual(<<"More info">>, maps:get(<<"description">>, ExternalDocs)).

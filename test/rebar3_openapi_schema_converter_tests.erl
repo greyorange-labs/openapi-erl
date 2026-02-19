@@ -145,7 +145,7 @@ convert_map_with_optional_fields_test() ->
     ?assert(lists:member(<<"name">>, Required)),
     ?assertNot(lists:member(<<"age">>, Required)).
 
-%% Test 7: Convert union type to OpenAPI oneOf
+%% Test 7: Convert all-atom union type to single enum (optimized)
 convert_union_type_to_oneof_test() ->
     %% Input: Erlang union type: admin | user | guest
     Types = [
@@ -160,23 +160,11 @@ convert_union_type_to_oneof_test() ->
     %% Execute conversion
     Schemas = gm_type_schema_converter:types_to_schemas(Types),
 
-    %% Assert: Should create a oneOf schema
+    %% Assert: All-atom union should collapse to a single enum
     ?assertMatch(#{<<"Role">> := _}, Schemas),
     RoleSchema = maps:get(<<"Role">>, Schemas),
-    ?assertMatch(#{<<"oneOf">> := _}, RoleSchema),
-
-    %% Check oneOf contains all three options
-    OneOf = maps:get(<<"oneOf">>, RoleSchema),
-    ?assertEqual(3, length(OneOf)),
-
-    %% Check each option is a string enum with one value
-    lists:foreach(
-        fun(Option) ->
-            ?assertEqual(<<"string">>, maps:get(<<"type">>, Option)),
-            ?assertMatch(#{<<"enum">> := [_]}, Option)
-        end,
-        OneOf
-    ).
+    ?assertEqual(<<"string">>, maps:get(<<"type">>, RoleSchema)),
+    ?assertEqual([<<"admin">>, <<"user">>, <<"guest">>], maps:get(<<"enum">>, RoleSchema)).
 
 %% Test 8: Convert list type to OpenAPI array
 convert_list_type_to_array_test() ->

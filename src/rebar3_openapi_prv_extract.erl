@@ -118,7 +118,10 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
             %% Parse handler file for type definitions (types are compile-time only)
             case parse_forms(HandlerPath, IncludePaths) of
                 {ok, Forms} ->
-                    Types = rebar3_openapi_parser:extract_types(Forms),
+                    LocalTypes = rebar3_openapi_parser:extract_types(Forms),
+
+                    %% Resolve remote type references from other modules
+                    Types = resolve_remote_types(LocalTypes, IncludePaths, State),
 
                     %% Load module and call trails() directly instead of parsing
                     case load_and_call_trails(ModuleName, State) of
@@ -158,6 +161,134 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
                     {error, {parse_error, Reason}}
             end
     end.
+
+%% @doc Resolve remote type references by finding and parsing referenced modules.
+%% Iterates until no new remote modules are discovered.
+-spec resolve_remote_types([rebar3_openapi_parser:type_def()], [string()], rebar_state:t()) ->
+    [rebar3_openapi_parser:type_def()].
+resolve_remote_types(Types, IncludePaths, State) ->
+    resolve_remote_types(Types, IncludePaths, State, _ResolvedModules = sets:new()).
+
+-spec resolve_remote_types(
+    [rebar3_openapi_parser:type_def()],
+    [string()],
+    rebar_state:t(),
+    sets:set(atom())
+) -> [rebar3_openapi_parser:type_def()].
+resolve_remote_types(Types, IncludePaths, State, ResolvedModules) ->
+    RemoteRefs = rebar3_openapi_parser:extract_remote_type_refs(Types),
+    %% Get unique modules we haven't resolved yet
+    NewModules = lists:usort([M || {M, _} <- RemoteRefs,
+                                   not sets:is_element(M, ResolvedModules)]),
+    case NewModules of
+        [] ->
+            %% No new modules to resolve
+            Types;
+        _ ->
+            %% Find and parse each new module
+            {NewTypes, UpdatedResolved} = lists:foldl(
+                fun(Module, {TypesAcc, ResolvedAcc}) ->
+                    NewResolved = sets:add_element(Module, ResolvedAcc),
+                    case find_module_source(Module, State) of
+                        {ok, SourcePath} ->
+                            rebar_api:info("  Resolving remote types from ~p (~s)", [Module, SourcePath]),
+                            case parse_forms(SourcePath, IncludePaths) of
+                                {ok, Forms} ->
+                                    ModuleTypes = rebar3_openapi_parser:extract_types(Forms),
+                                    %% Only add types not already present
+                                    Merged = merge_types(TypesAcc, ModuleTypes),
+                                    {Merged, NewResolved};
+                                {error, Reason} ->
+                                    rebar_api:warn("  Failed to parse ~p: ~p", [Module, Reason]),
+                                    {TypesAcc, NewResolved}
+                            end;
+                        not_found ->
+                            rebar_api:debug("  Source not found for module ~p, skipping", [Module]),
+                            {TypesAcc, NewResolved}
+                    end
+                end,
+                {Types, ResolvedModules},
+                NewModules
+            ),
+            %% Recurse to resolve any new remote refs introduced by the newly added types
+            resolve_remote_types(NewTypes, IncludePaths, State, UpdatedResolved)
+    end.
+
+%% @doc Find the source file for a module using code path and source directories.
+-spec find_module_source(atom(), rebar_state:t()) -> {ok, string()} | not_found.
+find_module_source(Module, State) ->
+    ModuleStr = atom_to_list(Module),
+    FileName = ModuleStr ++ ".erl",
+    %% Strategy 1: Use code:which to find beam, derive source from it
+    case code:which(Module) of
+        BeamPath when is_list(BeamPath) ->
+            %% Beam is at .../ebin/module.beam, source could be at .../src/**/module.erl
+            EbinDir = filename:dirname(BeamPath),
+            AppDir = filename:dirname(EbinDir),
+            SrcDir = filename:join(AppDir, "src"),
+            case find_erl_in_dir(SrcDir, FileName) of
+                {ok, Path} -> {ok, Path};
+                not_found ->
+                    %% Try searching project source dirs
+                    find_in_project_sources(FileName, State)
+            end;
+        _ ->
+            find_in_project_sources(FileName, State)
+    end.
+
+%% @doc Search project source directories for a file.
+-spec find_in_project_sources(string(), rebar_state:t()) -> {ok, string()} | not_found.
+find_in_project_sources(FileName, State) ->
+    %% Get all app paths from state
+    ProjectApps = rebar_state:project_apps(State),
+    search_apps_for_source(FileName, ProjectApps).
+
+-spec search_apps_for_source(string(), [term()]) -> {ok, string()} | not_found.
+search_apps_for_source(_FileName, []) ->
+    not_found;
+search_apps_for_source(FileName, [App | Rest]) ->
+    AppDir = rebar_app_info:dir(App),
+    SrcDir = filename:join(AppDir, "src"),
+    case find_erl_in_dir(SrcDir, FileName) of
+        {ok, Path} -> {ok, Path};
+        not_found -> search_apps_for_source(FileName, Rest)
+    end.
+
+%% @doc Recursively find an .erl file in a directory tree.
+-spec find_erl_in_dir(string(), string()) -> {ok, string()} | not_found.
+find_erl_in_dir(Dir, FileName) ->
+    Target = filename:join(Dir, FileName),
+    case filelib:is_file(Target) of
+        true ->
+            {ok, Target};
+        false ->
+            %% Search subdirectories
+            case file:list_dir(Dir) of
+                {ok, Entries} ->
+                    SubDirs = [filename:join(Dir, E) || E <- Entries,
+                               filelib:is_dir(filename:join(Dir, E))],
+                    find_in_subdirs(SubDirs, FileName);
+                {error, _} ->
+                    not_found
+            end
+    end.
+
+-spec find_in_subdirs([string()], string()) -> {ok, string()} | not_found.
+find_in_subdirs([], _FileName) ->
+    not_found;
+find_in_subdirs([Dir | Rest], FileName) ->
+    case find_erl_in_dir(Dir, FileName) of
+        {ok, Path} -> {ok, Path};
+        not_found -> find_in_subdirs(Rest, FileName)
+    end.
+
+%% @doc Merge new types into existing list, skipping duplicates (by type name).
+-spec merge_types([rebar3_openapi_parser:type_def()], [rebar3_openapi_parser:type_def()]) ->
+    [rebar3_openapi_parser:type_def()].
+merge_types(Existing, New) ->
+    ExistingNames = sets:from_list([Name || {Name, _} <- Existing]),
+    NewUnique = [T || {Name, _} = T <- New, not sets:is_element(Name, ExistingNames)],
+    Existing ++ NewUnique.
 
 -spec find_app_src(string(), string()) -> string() | undefined.
 find_app_src(HandlerPath, AppName) ->

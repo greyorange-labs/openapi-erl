@@ -260,3 +260,116 @@ expand_complete_trail_test() ->
     PutJsonContent = maps:get(<<"application/json">>, PutContent),
     PutReqSchema = maps:get(schema, PutJsonContent),
     ?assertEqual(<<"#/components/schemas/User">>, maps:get(<<"$ref">>, PutReqSchema)).
+
+%%%===================================================================
+%%% Test 6: Extended primitive types in parameters
+%%%===================================================================
+
+expand_parameter_primitive_non_neg_integer_test() ->
+    Param = #{name => <<"count">>, in => <<"query">>, schema => non_neg_integer},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    Schema = maps:get(schema, Expanded),
+    ?assertEqual(<<"integer">>, maps:get(<<"type">>, Schema)),
+    ?assertEqual(0, maps:get(<<"minimum">>, Schema)).
+
+expand_parameter_primitive_pos_integer_test() ->
+    Param = #{name => <<"id">>, in => <<"path">>, schema => pos_integer},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    Schema = maps:get(schema, Expanded),
+    ?assertEqual(<<"integer">>, maps:get(<<"type">>, Schema)),
+    ?assertEqual(1, maps:get(<<"minimum">>, Schema)).
+
+expand_parameter_primitive_number_test() ->
+    Param = #{name => <<"val">>, in => <<"query">>, schema => number},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    ?assertEqual(#{<<"type">> => <<"number">>}, maps:get(schema, Expanded)).
+
+expand_parameter_primitive_string_test() ->
+    Param = #{name => <<"s">>, in => <<"query">>, schema => string},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    ?assertEqual(#{<<"type">> => <<"string">>}, maps:get(schema, Expanded)).
+
+expand_parameter_primitive_atom_test() ->
+    Param = #{name => <<"a">>, in => <<"query">>, schema => atom},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    ?assertEqual(#{<<"type">> => <<"string">>}, maps:get(schema, Expanded)).
+
+expand_parameter_primitive_term_test() ->
+    Param = #{name => <<"t">>, in => <<"query">>, schema => term},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    ?assertEqual(#{}, maps:get(schema, Expanded)).
+
+expand_parameter_primitive_timeout_test() ->
+    Param = #{name => <<"t">>, in => <<"query">>, schema => timeout},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    Schema = maps:get(schema, Expanded),
+    ?assertMatch(#{<<"oneOf">> := _}, Schema).
+
+%%%===================================================================
+%%% Test 7: Nullable type support in parameters and media types
+%%%===================================================================
+
+expand_parameter_nullable_primitive_test() ->
+    %% {nullable, binary} -> oneOf: [{type: string}, {type: null}]
+    Param = #{name => <<"opt">>, in => <<"query">>, schema => {nullable, binary}},
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], []),
+    Schema = maps:get(schema, Expanded),
+    ?assertMatch(#{<<"oneOf">> := _}, Schema),
+    OneOf = maps:get(<<"oneOf">>, Schema),
+    ?assertEqual(2, length(OneOf)),
+    ?assertEqual(#{<<"type">> => <<"string">>}, lists:nth(1, OneOf)),
+    ?assertEqual(#{<<"type">> => <<"null">>}, lists:nth(2, OneOf)).
+
+expand_parameter_nullable_user_type_test() ->
+    %% {nullable, user} -> oneOf: [{$ref: User}, {type: null}]
+    Param = #{name => <<"opt">>, in => <<"query">>, schema => {nullable, user}},
+    Types = [{user, {type, 1, map, []}}],
+    [Expanded] = rebar3_openapi_expander:expand_parameters([Param], Types),
+    Schema = maps:get(schema, Expanded),
+    ?assertMatch(#{<<"oneOf">> := _}, Schema),
+    OneOf = maps:get(<<"oneOf">>, Schema),
+    ?assertEqual(2, length(OneOf)),
+    ?assertMatch(#{<<"$ref">> := <<"#/components/schemas/User">>}, lists:nth(1, OneOf)),
+    ?assertEqual(#{<<"type">> => <<"null">>}, lists:nth(2, OneOf)).
+
+expand_media_type_nullable_test() ->
+    %% Nullable schema in request body
+    ReqBody = #{
+        required => true,
+        content => #{
+            <<"application/json">> => #{
+                schema => {nullable, user}
+            }
+        }
+    },
+    Types = [{user, {type, 1, map, []}}],
+    Expanded = rebar3_openapi_expander:expand_request_body(ReqBody, Types),
+    Content = maps:get(content, Expanded),
+    JsonContent = maps:get(<<"application/json">>, Content),
+    Schema = maps:get(schema, JsonContent),
+    ?assertMatch(#{<<"oneOf">> := _}, Schema),
+    OneOf = maps:get(<<"oneOf">>, Schema),
+    ?assertMatch(#{<<"$ref">> := <<"#/components/schemas/User">>}, lists:nth(1, OneOf)),
+    ?assertEqual(#{<<"type">> => <<"null">>}, lists:nth(2, OneOf)).
+
+expand_media_type_nullable_array_test() ->
+    %% Nullable array: {nullable, {array, user}}
+    ReqBody = #{
+        content => #{
+            <<"application/json">> => #{
+                schema => {nullable, {array, user}}
+            }
+        }
+    },
+    Types = [{user, {type, 1, map, []}}],
+    Expanded = rebar3_openapi_expander:expand_request_body(ReqBody, Types),
+    Content = maps:get(content, Expanded),
+    JsonContent = maps:get(<<"application/json">>, Content),
+    Schema = maps:get(schema, JsonContent),
+    ?assertMatch(#{<<"oneOf">> := _}, Schema),
+    OneOf = maps:get(<<"oneOf">>, Schema),
+    ?assertEqual(2, length(OneOf)),
+    ArraySchema = lists:nth(1, OneOf),
+    ?assertEqual(<<"array">>, maps:get(<<"type">>, ArraySchema)),
+    ?assertMatch(#{<<"$ref">> := <<"#/components/schemas/User">>}, maps:get(<<"items">>, ArraySchema)),
+    ?assertEqual(#{<<"type">> => <<"null">>}, lists:nth(2, OneOf)).

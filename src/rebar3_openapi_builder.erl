@@ -273,8 +273,11 @@ operation_meta_to_openapi(Meta) ->
     Op4 = add_if_present(Op3, <<"parameters">>, maps:get(parameters, Meta, undefined)),
     Op5 = add_if_present(Op4, <<"requestBody">>, maps:get(requestBody, Meta, undefined)),
     Op6 = add_if_present(Op5, <<"responses">>, maps:get(responses, Meta, undefined)),
+    Op7 = add_if_present(Op6, <<"deprecated">>, maps:get(deprecated, Meta, undefined)),
+    Op8 = add_if_present(Op7, <<"security">>, maps:get(security, Meta, undefined)),
+    Op9 = add_if_present(Op8, <<"externalDocs">>, maps:get(externalDocs, Meta, undefined)),
 
-    Op6.
+    Op9.
 
 %% @doc Add field to map if value is not undefined
 -spec add_if_present(map(), binary(), term()) -> map().

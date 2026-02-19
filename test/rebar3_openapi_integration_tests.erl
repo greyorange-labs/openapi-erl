@@ -334,22 +334,10 @@ generate_complete_openapi_doc_test() ->
     % age is optional
     ?assertNot(lists:member(<<"age">>, UserRequired)),
 
-    %% Verify UserRole enum (converted to oneOf for union types)
+    %% Verify UserRole enum (all-atom union collapses to single enum)
     UserRoleSchema = maps:get(<<"UserRole">>, Schemas),
-    %% Union types are converted to oneOf with enum items
-    ?assert(maps:is_key(<<"oneOf">>, UserRoleSchema), "UserRole should have oneOf for union type"),
-    UserRoleOneOf = maps:get(<<"oneOf">>, UserRoleSchema),
-    ?assert(length(UserRoleOneOf) >= 3, "Should have at least 3 enum options"),
-    %% Verify enum values exist in oneOf
-    EnumValues = lists:flatmap(
-        fun(EnumItem) ->
-            case maps:get(<<"enum">>, EnumItem, []) of
-                [Value] -> [Value];
-                _ -> []
-            end
-        end,
-        UserRoleOneOf
-    ),
+    ?assertEqual(<<"string">>, maps:get(<<"type">>, UserRoleSchema)),
+    EnumValues = maps:get(<<"enum">>, UserRoleSchema),
     ?assert(lists:member(<<"admin">>, EnumValues)),
     ?assert(lists:member(<<"user">>, EnumValues)),
     ?assert(lists:member(<<"guest">>, EnumValues)),

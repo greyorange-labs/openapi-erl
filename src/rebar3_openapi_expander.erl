@@ -176,27 +176,14 @@ expand_parameters(Parameters, Types) ->
 
 %% @doc Expand a single parameter
 -spec expand_parameter(map(), [type_def()]) -> map().
+expand_parameter(#{schema := {nullable, TypeRef}} = Param, Types) when is_atom(TypeRef) ->
+    %% Nullable type reference -> oneOf: [inner_schema, {type: null}]
+    InnerSchema = resolve_type_to_schema(TypeRef, Types),
+    NullableSchema = #{<<"oneOf">> => [InnerSchema, #{<<"type">> => <<"null">>}]},
+    Param#{schema => NullableSchema};
 expand_parameter(#{schema := TypeRef} = Param, Types) when is_atom(TypeRef) ->
     %% Check if it's a primitive type or a user-defined type
-    case is_primitive_type(TypeRef) of
-        true ->
-            %% Convert primitive type to inline schema
-            InlineSchema = primitive_type_to_schema(TypeRef),
-            Param#{schema => InlineSchema};
-        false ->
-            %% Check if it's a defined type in Types
-            case lists:keyfind(TypeRef, 1, Types) of
-                {TypeRef, _TypeDef} ->
-                    %% User-defined type - expand to $ref
-                    SchemaRef = type_ref_to_schema_ref(TypeRef),
-                    Param#{schema => #{<<"$ref">> => SchemaRef}};
-                false ->
-                    %% Unknown type - assume it's a user-defined type and create $ref
-                    %% (will fail validation if type doesn't exist, but that's expected)
-                    SchemaRef = type_ref_to_schema_ref(TypeRef),
-                    Param#{schema => #{<<"$ref">> => SchemaRef}}
-            end
-    end;
+    Param#{schema => resolve_type_to_schema(TypeRef, Types)};
 expand_parameter(Param, _Types) ->
     %% No type reference or already expanded
     Param.
@@ -241,50 +228,26 @@ expand_response(Response, _Types) ->
 -spec expand_media_type_schema(map(), [type_def()]) -> map().
 expand_media_type_schema(#{schema := {array, ItemType}} = MediaTypeMeta, Types) when is_atom(ItemType) ->
     %% Array type reference - expand to OpenAPI array schema
-    ItemsSchema =
-        case is_primitive_type(ItemType) of
-            true ->
-                %% Primitive type - use inline schema
-                primitive_type_to_schema(ItemType);
-            false ->
-                %% Check if it's a defined type in Types
-                case lists:keyfind(ItemType, 1, Types) of
-                    {ItemType, _TypeDef} ->
-                        %% User-defined type - use $ref
-                        ItemRef = type_ref_to_schema_ref(ItemType),
-                        #{<<"$ref">> => ItemRef};
-                    false ->
-                        %% Unknown type - assume it's a user-defined type and create $ref
-                        ItemRef = type_ref_to_schema_ref(ItemType),
-                        #{<<"$ref">> => ItemRef}
-                end
-        end,
+    ItemsSchema = resolve_type_to_schema(ItemType, Types),
     MediaTypeMeta#{
         schema => #{
             <<"type">> => <<"array">>,
             <<"items">> => ItemsSchema
         }
     };
+expand_media_type_schema(#{schema := {nullable, TypeRef}} = MediaTypeMeta, Types) when is_atom(TypeRef) ->
+    %% Nullable type reference -> oneOf: [inner_schema, {type: null}]
+    InnerSchema = resolve_type_to_schema(TypeRef, Types),
+    NullableSchema = #{<<"oneOf">> => [InnerSchema, #{<<"type">> => <<"null">>}]},
+    MediaTypeMeta#{schema => NullableSchema};
+expand_media_type_schema(#{schema := {nullable, {array, ItemType}}} = MediaTypeMeta, Types) when is_atom(ItemType) ->
+    %% Nullable array -> oneOf: [{type: array, items: ...}, {type: null}]
+    ItemsSchema = resolve_type_to_schema(ItemType, Types),
+    ArraySchema = #{<<"type">> => <<"array">>, <<"items">> => ItemsSchema},
+    NullableSchema = #{<<"oneOf">> => [ArraySchema, #{<<"type">> => <<"null">>}]},
+    MediaTypeMeta#{schema => NullableSchema};
 expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, Types) when is_atom(TypeRef) ->
-    %% Check if it's a primitive type or a user-defined type
-    case is_primitive_type(TypeRef) of
-        true ->
-            %% Convert primitive type to inline schema
-            InlineSchema = primitive_type_to_schema(TypeRef),
-            MediaTypeMeta#{schema => InlineSchema};
-        false ->
-            %% Check if it's a defined type in Types
-            case lists:keyfind(TypeRef, 1, Types) of
-                {TypeRef, _TypeDef} ->
-                    %% User-defined type - expand to $ref
-                    SchemaRef = type_ref_to_schema_ref(TypeRef),
-                    MediaTypeMeta#{schema => #{<<"$ref">> => SchemaRef}};
-                false ->
-                    %% Unknown type - assume it's a user-defined type and create $ref
-                    SchemaRef = type_ref_to_schema_ref(TypeRef),
-                    MediaTypeMeta#{schema => #{<<"$ref">> => SchemaRef}}
-            end
-    end;
+    MediaTypeMeta#{schema => resolve_type_to_schema(TypeRef, Types)};
 expand_media_type_schema(MediaTypeMeta, _Types) ->
     MediaTypeMeta.
 
@@ -295,12 +258,35 @@ type_ref_to_schema_ref(TypeName) ->
     CapitalizedName = gm_type_schema_converter:capitalize_type_name(TypeName),
     <<"#/components/schemas/", CapitalizedName/binary>>.
 
+%% @doc Resolve a type atom to an inline schema or $ref
+-spec resolve_type_to_schema(atom(), [type_def()]) -> map().
+resolve_type_to_schema(TypeRef, _Types) ->
+    case is_primitive_type(TypeRef) of
+        true ->
+            primitive_type_to_schema(TypeRef);
+        false ->
+            SchemaRef = type_ref_to_schema_ref(TypeRef),
+            #{<<"$ref">> => SchemaRef}
+    end.
+
 %% @doc Check if an atom is a primitive Erlang type
 -spec is_primitive_type(atom()) -> boolean().
 is_primitive_type(binary) -> true;
 is_primitive_type(integer) -> true;
 is_primitive_type(float) -> true;
 is_primitive_type(boolean) -> true;
+is_primitive_type(non_neg_integer) -> true;
+is_primitive_type(pos_integer) -> true;
+is_primitive_type(neg_integer) -> true;
+is_primitive_type(number) -> true;
+is_primitive_type(string) -> true;
+is_primitive_type(atom) -> true;
+is_primitive_type(term) -> true;
+is_primitive_type(any) -> true;
+is_primitive_type(timeout) -> true;
+is_primitive_type(byte) -> true;
+is_primitive_type(char) -> true;
+is_primitive_type(arity) -> true;
 is_primitive_type(Binary) when Binary =:= <<"binary">> -> true;
 is_primitive_type(Integer) when Integer =:= <<"integer">> -> true;
 is_primitive_type(Float) when Float =:= <<"float">> -> true;
@@ -317,6 +303,33 @@ primitive_type_to_schema(float) ->
     #{<<"type">> => <<"number">>};
 primitive_type_to_schema(boolean) ->
     #{<<"type">> => <<"boolean">>};
+primitive_type_to_schema(non_neg_integer) ->
+    #{<<"type">> => <<"integer">>, <<"minimum">> => 0};
+primitive_type_to_schema(pos_integer) ->
+    #{<<"type">> => <<"integer">>, <<"minimum">> => 1};
+primitive_type_to_schema(neg_integer) ->
+    #{<<"type">> => <<"integer">>, <<"maximum">> => -1};
+primitive_type_to_schema(number) ->
+    #{<<"type">> => <<"number">>};
+primitive_type_to_schema(string) ->
+    #{<<"type">> => <<"string">>};
+primitive_type_to_schema(atom) ->
+    #{<<"type">> => <<"string">>};
+primitive_type_to_schema(term) ->
+    #{};
+primitive_type_to_schema(any) ->
+    #{};
+primitive_type_to_schema(timeout) ->
+    #{<<"oneOf">> => [
+        #{<<"type">> => <<"integer">>, <<"minimum">> => 0},
+        #{<<"type">> => <<"string">>, <<"enum">> => [<<"infinity">>]}
+    ]};
+primitive_type_to_schema(byte) ->
+    #{<<"type">> => <<"integer">>, <<"minimum">> => 0, <<"maximum">> => 255};
+primitive_type_to_schema(char) ->
+    #{<<"type">> => <<"integer">>, <<"minimum">> => 0, <<"maximum">> => 1114111};
+primitive_type_to_schema(arity) ->
+    #{<<"type">> => <<"integer">>, <<"minimum">> => 0, <<"maximum">> => 255};
 primitive_type_to_schema(_) ->
     %% Fallback for unknown primitive types
     #{<<"type">> => <<"string">>}.
