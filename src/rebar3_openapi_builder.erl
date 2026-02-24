@@ -1,13 +1,17 @@
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_builder).
 
-%%%===================================================================
-%%% OpenAPI Document Builder
-%%%===================================================================
-%%%
-%%% Builds complete OpenAPI 3.0.x document structure from expanded trails.
-%%% Updated to work with the new trails-based approach.
-%%%
-%%%===================================================================
+-moduledoc """
+----------------------------------------------------------------------
+OpenAPI Document Builder
+
+Builds complete OpenAPI 3.0.x document structure from expanded trails.
+Assembles paths, components, info sections from expanded trail data.
+----------------------------------------------------------------------
+""".
 
 -export([
     build/3,
@@ -22,7 +26,7 @@
 %%% Public API
 %%%===================================================================
 
-%% @doc Build OpenAPI document from expanded trails (new approach)
+-doc "Build OpenAPI document from expanded trails (new approach)".
 -spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) ->
     map().
 build_from_trails(Trails, Types, AppName, AppSrcPath) ->
@@ -46,7 +50,7 @@ build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot) ->
         <<"security">> => []
     }.
 
-%% @doc Build OpenAPI document from operations (legacy approach)
+-doc "Build OpenAPI document from operations (legacy approach)".
 -spec build([operation()], [type_def()], AppName :: atom() | binary()) -> map().
 build(Operations, Types, AppName) ->
     #{
@@ -221,7 +225,7 @@ build_servers() ->
         }
     ].
 
-%% @doc Build paths from trails (new approach)
+-doc "Build paths from trails (new approach)".
 -spec build_paths_from_trails([expanded_trail()]) -> map().
 build_paths_from_trails(Trails) ->
     lists:foldl(
@@ -256,7 +260,7 @@ build_paths_from_trails(Trails) ->
         Trails
     ).
 
-%% @doc Convert metadata to OpenAPI operation object
+-doc false.
 -spec operation_meta_to_openapi(map()) -> map().
 operation_meta_to_openapi(Meta) ->
     %% Start with operationId (should already be present from expander)
@@ -279,12 +283,12 @@ operation_meta_to_openapi(Meta) ->
 
     Op9.
 
-%% @doc Add field to map if value is not undefined
+-doc false.
 -spec add_if_present(map(), binary(), term()) -> map().
 add_if_present(Map, _Key, undefined) -> Map;
 add_if_present(Map, Key, Value) -> Map#{Key => Value}.
 
-%% @doc Convert Cowboy path params to OpenAPI format (:id -> {id})
+-doc false.
 -spec convert_path_params(binary()) -> binary().
 convert_path_params(Path) ->
     %% Replace :param with {param}
@@ -341,7 +345,7 @@ build_paths(Operations) ->
         Operations
     ).
 
-%% @doc Build components section with schemas
+-doc "Build components section with schemas".
 -spec build_components([type_def()]) -> map().
 build_components(Types) ->
     %% Convert type definitions to OpenAPI schemas

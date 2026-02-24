@@ -1,5 +1,19 @@
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_prv_extract).
 -behaviour(provider).
+
+-moduledoc """
+----------------------------------------------------------------------
+rebar3 Provider for OpenAPI Documentation Extraction
+
+Orchestrates the full pipeline: parse handler -> extract types ->
+resolve remote types -> expand trails -> convert schemas -> build
+OpenAPI document -> write YAML/JSON output.
+----------------------------------------------------------------------
+""".
 
 -export([init/1, do/1, format_error/1, write_openapi_file/2]).
 
@@ -162,8 +176,7 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
             end
     end.
 
-%% @doc Resolve remote type references by finding and parsing referenced modules.
-%% Iterates until no new remote modules are discovered.
+-doc false.
 -spec resolve_remote_types([rebar3_openapi_parser:type_def()], [string()], rebar_state:t()) ->
     [rebar3_openapi_parser:type_def()].
 resolve_remote_types(Types, IncludePaths, State) ->
@@ -178,8 +191,11 @@ resolve_remote_types(Types, IncludePaths, State) ->
 resolve_remote_types(Types, IncludePaths, State, ResolvedModules) ->
     RemoteRefs = rebar3_openapi_parser:extract_remote_type_refs(Types),
     %% Get unique modules we haven't resolved yet
-    NewModules = lists:usort([M || {M, _} <- RemoteRefs,
-                                   not sets:is_element(M, ResolvedModules)]),
+    NewModules = lists:usort([
+        M
+     || {M, _} <- RemoteRefs,
+        not sets:is_element(M, ResolvedModules)
+    ]),
     case NewModules of
         [] ->
             %% No new modules to resolve
@@ -214,7 +230,7 @@ resolve_remote_types(Types, IncludePaths, State, ResolvedModules) ->
             resolve_remote_types(NewTypes, IncludePaths, State, UpdatedResolved)
     end.
 
-%% @doc Find the source file for a module using code path and source directories.
+-doc false.
 -spec find_module_source(atom(), rebar_state:t()) -> {ok, string()} | not_found.
 find_module_source(Module, State) ->
     ModuleStr = atom_to_list(Module),
@@ -227,7 +243,8 @@ find_module_source(Module, State) ->
             AppDir = filename:dirname(EbinDir),
             SrcDir = filename:join(AppDir, "src"),
             case find_erl_in_dir(SrcDir, FileName) of
-                {ok, Path} -> {ok, Path};
+                {ok, Path} ->
+                    {ok, Path};
                 not_found ->
                     %% Try searching project source dirs
                     find_in_project_sources(FileName, State)
@@ -236,7 +253,7 @@ find_module_source(Module, State) ->
             find_in_project_sources(FileName, State)
     end.
 
-%% @doc Search project source directories for a file.
+-doc false.
 -spec find_in_project_sources(string(), rebar_state:t()) -> {ok, string()} | not_found.
 find_in_project_sources(FileName, State) ->
     %% Get all app paths from state
@@ -254,7 +271,7 @@ search_apps_for_source(FileName, [App | Rest]) ->
         not_found -> search_apps_for_source(FileName, Rest)
     end.
 
-%% @doc Recursively find an .erl file in a directory tree.
+-doc false.
 -spec find_erl_in_dir(string(), string()) -> {ok, string()} | not_found.
 find_erl_in_dir(Dir, FileName) ->
     Target = filename:join(Dir, FileName),
@@ -265,8 +282,11 @@ find_erl_in_dir(Dir, FileName) ->
             %% Search subdirectories
             case file:list_dir(Dir) of
                 {ok, Entries} ->
-                    SubDirs = [filename:join(Dir, E) || E <- Entries,
-                               filelib:is_dir(filename:join(Dir, E))],
+                    SubDirs = [
+                        filename:join(Dir, E)
+                     || E <- Entries,
+                        filelib:is_dir(filename:join(Dir, E))
+                    ],
                     find_in_subdirs(SubDirs, FileName);
                 {error, _} ->
                     not_found
@@ -282,7 +302,7 @@ find_in_subdirs([Dir | Rest], FileName) ->
         not_found -> find_in_subdirs(Rest, FileName)
     end.
 
-%% @doc Merge new types into existing list, skipping duplicates (by type name).
+-doc false.
 -spec merge_types([rebar3_openapi_parser:type_def()], [rebar3_openapi_parser:type_def()]) ->
     [rebar3_openapi_parser:type_def()].
 merge_types(Existing, New) ->
@@ -513,8 +533,7 @@ write_json_file(FilePath, Doc) ->
             {error, {Class, ErrReason}}
     end.
 
-%% @doc Convert OpenAPI document map to ordered proplist for JSON encoding
-%% OpenAPI 3.0.3 spec requires: openapi, info, servers, paths, components
+-doc false.
 -spec map_to_ordered_proplist(map()) -> [{binary(), term()}].
 map_to_ordered_proplist(Doc) ->
     %% Define the required field order for OpenAPI 3.0.3
@@ -554,7 +573,7 @@ map_to_ordered_proplist(Doc) ->
     %% OrderedPairs is already in correct order (openapi first), don't reverse it
     OrderedPairs ++ RemainingPairs.
 
-%% @doc Recursively convert map values to proplists to preserve order
+-doc false.
 -spec convert_value_to_proplist(term()) -> term().
 convert_value_to_proplist(Map) when is_map(Map) ->
     %% For nested maps, convert to proplist but don't enforce specific order

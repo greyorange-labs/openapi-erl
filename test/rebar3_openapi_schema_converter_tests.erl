@@ -1,33 +1,19 @@
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_schema_converter_tests).
 
+-moduledoc """
+----------------------------------------------------------------------
+Unit Tests for Schema Conversion (via gm_type_schema_converter)
+
+Tests conversion of Erlang type ASTs to OpenAPI JSON Schema using
+the shared gm_type_schema_converter library.
+----------------------------------------------------------------------
+""".
+
 -include_lib("eunit/include/eunit.hrl").
-
-%%%===================================================================
-%%% NOTE: These tests now use gm_type_schema_converter library
-%%% The plugin's own converter has been replaced with the shared library
-%%%===================================================================
-
-%%%===================================================================
-%%% Test Progress Tracking
-%%%===================================================================
-%% [✅] Test 1: convert_binary_type_test - PASSED 2025-01-15
-%% [✅] Test 2: convert_integer_type_test - PASSED 2025-01-15
-%% [✅] Test 3: convert_float_type_test - PASSED 2025-01-15
-%% [✅] Test 4: convert_boolean_type_test - PASSED 2025-01-15
-%% [✅] Test 5: convert_map_all_required_fields_test - PASSED 2025-01-15
-%% [✅] Test 6: convert_map_with_optional_fields_test - PASSED 2025-01-15
-%% [✅] Test 7: convert_union_type_to_oneof_test - PASSED 2025-01-15
-%% [✅] Test 8: convert_list_type_to_array_test - PASSED 2025-01-15
-%% [✅] Test 9: convert_nested_map_test - PASSED 2025-01-15
-%% [✅] Test 10: convert_user_type_reference_test - PASSED 2025-01-15
-%% [✅] Test 11: convert_circular_reference_test - PASSED 2025-01-15
-%%
-%% ALL SCHEMA CONVERTER TESTS COMPLETE: 11/11 PASSED ✓
-%%%===================================================================
-
-%%%===================================================================
-%%% Test Cases
-%%%===================================================================
 
 %% Test 1: Convert binary() type to OpenAPI string schema
 convert_binary_type_test() ->

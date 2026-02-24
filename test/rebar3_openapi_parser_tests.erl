@@ -1,24 +1,17 @@
-%%%===================================================================
-%%% Unit Tests for rebar3_openapi_parser
-%%%===================================================================
-%%% This module contains unit tests for the rebar3_openapi_parser module,
-%%% focusing on extracting types, routes, and contracts from Erlang handler files.
-%%%===================================================================
-%%%
-%%% Test Progress:
-%%% [✅] Test 1: extract_types_from_handler_test - PASSED
-%%%
-%%% Note: trails/0 is now called directly at runtime instead of parsing,
-%%% so extract_trails tests have been removed.
-%%%
-%%% ALL PARSER TESTS COMPLETE: 1/1 PASSED ✓
-%%%===================================================================
-
-%%%===================================================================
-%%% Test Cases
-%%%===================================================================
-
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_parser_tests).
+
+-moduledoc """
+----------------------------------------------------------------------
+Unit Tests for rebar3_openapi_parser
+
+Tests extraction of -type definitions and remote type references
+from Erlang handler source files.
+----------------------------------------------------------------------
+""".
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -61,29 +54,33 @@ extract_remote_type_refs_empty_test() ->
 
 extract_remote_type_refs_basic_test() ->
     %% Type with a remote type reference: common_types:user_id()
-    Types = [{my_type,
-        {type, 1, map, [
-            {type, 1, map_field_exact, [
-                {atom, 1, id},
-                {remote_type, 1, [{atom, 1, common_types}, {atom, 1, user_id}, []]}
-            ]}
-        ]}}],
+    Types = [
+        {my_type,
+            {type, 1, map, [
+                {type, 1, map_field_exact, [
+                    {atom, 1, id},
+                    {remote_type, 1, [{atom, 1, common_types}, {atom, 1, user_id}, []]}
+                ]}
+            ]}}
+    ],
     Refs = rebar3_openapi_parser:extract_remote_type_refs(Types),
     ?assertEqual([{common_types, user_id}], Refs).
 
 extract_remote_type_refs_skips_gm_type_test() ->
     %% gm_type references should be excluded
-    Types = [{my_type,
-        {type, 1, map, [
-            {type, 1, map_field_exact, [
-                {atom, 1, email},
-                {remote_type, 1, [{atom, 1, gm_type}, {atom, 1, email}, []]}
-            ]},
-            {type, 1, map_field_exact, [
-                {atom, 1, id},
-                {remote_type, 1, [{atom, 1, shared_types}, {atom, 1, entity_id}, []]}
-            ]}
-        ]}}],
+    Types = [
+        {my_type,
+            {type, 1, map, [
+                {type, 1, map_field_exact, [
+                    {atom, 1, email},
+                    {remote_type, 1, [{atom, 1, gm_type}, {atom, 1, email}, []]}
+                ]},
+                {type, 1, map_field_exact, [
+                    {atom, 1, id},
+                    {remote_type, 1, [{atom, 1, shared_types}, {atom, 1, entity_id}, []]}
+                ]}
+            ]}}
+    ],
     Refs = rebar3_openapi_parser:extract_remote_type_refs(Types),
     ?assertEqual([{shared_types, entity_id}], Refs).
 
@@ -98,10 +95,12 @@ extract_remote_type_refs_deduplicates_test() ->
 
 extract_remote_type_refs_in_union_test() ->
     %% Remote refs inside union types
-    Types = [{my_type,
-        {type, 1, union, [
-            {remote_type, 1, [{atom, 1, mod_a}, {atom, 1, type_a}, []]},
-            {remote_type, 1, [{atom, 1, mod_b}, {atom, 1, type_b}, []]}
-        ]}}],
+    Types = [
+        {my_type,
+            {type, 1, union, [
+                {remote_type, 1, [{atom, 1, mod_a}, {atom, 1, type_a}, []]},
+                {remote_type, 1, [{atom, 1, mod_b}, {atom, 1, type_b}, []]}
+            ]}}
+    ],
     Refs = rebar3_openapi_parser:extract_remote_type_refs(Types),
     ?assertEqual([{mod_a, type_a}, {mod_b, type_b}], Refs).
