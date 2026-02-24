@@ -58,12 +58,20 @@ Key responsibilities:
 %%% Public API
 %%%===================================================================
 
--doc "Expand all trails with type references".
+-doc """
+----------------------------------------------------------------------
+Expand all trails with type references
+----------------------------------------------------------------------
+""".
 -spec expand_trails([trail()], [type_def()]) -> [expanded_trail()].
 expand_trails(Trails, Types) ->
     lists:map(fun(Trail) -> expand_trail(Trail, Types) end, Trails).
 
--doc "Expand a single trail".
+-doc """
+----------------------------------------------------------------------
+Expand a single trail
+----------------------------------------------------------------------
+""".
 -spec expand_trail(trail(), [type_def()]) -> expanded_trail().
 expand_trail(Trail, Types) ->
     %% trails:trail() returns a map with path_match or path key
@@ -94,7 +102,11 @@ expand_metadata(Path, Metadata, Types) ->
         Metadata
     ).
 
--doc "Expand a single operation (method) metadata".
+-doc """
+----------------------------------------------------------------------
+Expand a single operation (method) metadata
+----------------------------------------------------------------------
+""".
 -spec expand_operation(binary(), atom(), map(), [type_def()]) -> map().
 expand_operation(Path, Method, OperationMeta, Types) ->
     %% 1. Generate operationId if not present
@@ -130,7 +142,11 @@ expand_operation(Path, Method, OperationMeta, Types) ->
 
     Meta3.
 
--doc "Generate unique operationId from path and method".
+-doc """
+----------------------------------------------------------------------
+Generate unique operationId from path and method
+----------------------------------------------------------------------
+""".
 -spec generate_operation_id(binary(), atom()) -> binary().
 generate_operation_id(Path, Method) ->
     %% Convert method to string
@@ -173,7 +189,11 @@ capitalize_first(<<First:8, Rest/binary>>) when First >= $a, First =< $z ->
 capitalize_first(Bin) ->
     Bin.
 
--doc "Expand parameters list".
+-doc """
+----------------------------------------------------------------------
+Expand parameters list
+----------------------------------------------------------------------
+""".
 -spec expand_parameters([map()], [type_def()]) -> [map()].
 expand_parameters(Parameters, Types) ->
     lists:map(fun(Param) -> expand_parameter(Param, Types) end, Parameters).
@@ -192,7 +212,11 @@ expand_parameter(Param, _Types) ->
     %% No type reference or already expanded
     Param.
 
--doc "Expand requestBody".
+-doc """
+----------------------------------------------------------------------
+Expand requestBody
+----------------------------------------------------------------------
+""".
 -spec expand_request_body(map(), [type_def()]) -> map().
 expand_request_body(#{content := Content} = ReqBody, Types) ->
     ExpandedContent = maps:map(
@@ -205,7 +229,11 @@ expand_request_body(#{content := Content} = ReqBody, Types) ->
 expand_request_body(ReqBody, _Types) ->
     ReqBody.
 
--doc "Expand responses map".
+-doc """
+----------------------------------------------------------------------
+Expand responses map
+----------------------------------------------------------------------
+""".
 -spec expand_responses(map(), [type_def()]) -> map().
 expand_responses(Responses, Types) ->
     maps:map(
@@ -255,7 +283,11 @@ expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, Types) when is_at
 expand_media_type_schema(MediaTypeMeta, _Types) ->
     MediaTypeMeta.
 
--doc "Convert type atom to OpenAPI $ref path".
+-doc """
+----------------------------------------------------------------------
+Convert type atom to OpenAPI $ref path
+----------------------------------------------------------------------
+""".
 -spec type_ref_to_schema_ref(atom()) -> binary().
 type_ref_to_schema_ref(TypeName) ->
     %% Capitalize type name (user_id -> UserId)

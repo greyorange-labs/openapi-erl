@@ -26,7 +26,11 @@ Assembles paths, components, info sections from expanded trail data.
 %%% Public API
 %%%===================================================================
 
--doc "Build OpenAPI document from expanded trails (new approach)".
+-doc """
+----------------------------------------------------------------------
+Build OpenAPI document from expanded trails (new approach)
+----------------------------------------------------------------------
+""".
 -spec build_from_trails([expanded_trail()], [type_def()], AppName :: atom() | binary(), AppSrcPath :: string() | undefined) ->
     map().
 build_from_trails(Trails, Types, AppName, AppSrcPath) ->
@@ -50,7 +54,11 @@ build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot) ->
         <<"security">> => []
     }.
 
--doc "Build OpenAPI document from operations (legacy approach)".
+-doc """
+----------------------------------------------------------------------
+Build OpenAPI document from operations (legacy approach)
+----------------------------------------------------------------------
+""".
 -spec build([operation()], [type_def()], AppName :: atom() | binary()) -> map().
 build(Operations, Types, AppName) ->
     #{
@@ -225,7 +233,11 @@ build_servers() ->
         }
     ].
 
--doc "Build paths from trails (new approach)".
+-doc """
+----------------------------------------------------------------------
+Build paths from trails (new approach)
+----------------------------------------------------------------------
+""".
 -spec build_paths_from_trails([expanded_trail()]) -> map().
 build_paths_from_trails(Trails) ->
     lists:foldl(
@@ -345,7 +357,11 @@ build_paths(Operations) ->
         Operations
     ).
 
--doc "Build components section with schemas".
+-doc """
+----------------------------------------------------------------------
+Build components section with schemas
+----------------------------------------------------------------------
+""".
 -spec build_components([type_def()]) -> map().
 build_components(Types) ->
     %% Convert type definitions to OpenAPI schemas

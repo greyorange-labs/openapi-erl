@@ -43,9 +43,11 @@ extract_types(Forms) ->
     ).
 
 -doc """
+----------------------------------------------------------------------
 Extract remote type references from a list of type definitions.
 Walks the type ASTs and collects {Module, TypeName} pairs for remote_type nodes.
 Excludes gm_type references (handled inline by the converter).
+----------------------------------------------------------------------
 """.
 -spec extract_remote_type_refs([type_def()]) -> [{Module :: atom(), TypeName :: atom()}].
 extract_remote_type_refs(Types) ->
