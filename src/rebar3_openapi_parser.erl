@@ -1,14 +1,18 @@
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_parser).
 
-%%%===================================================================
-%%% Parser for OpenAPI Documentation Extraction
-%%%===================================================================
-%%%
-%%% Parses Erlang source files to extract -type definitions.
-%%% Note: trails/0 is now called directly at runtime instead of parsing.
-%%% Used by the plugin for OpenAPI 3.0.x documentation generation.
-%%%
-%%%===================================================================
+-moduledoc """
+----------------------------------------------------------------------
+Parser for OpenAPI Documentation Extraction
+
+Parses Erlang source files to extract -type definitions.
+Note: trails/0 is now called directly at runtime instead of parsing.
+Used by the plugin for OpenAPI 3.0.x documentation generation.
+----------------------------------------------------------------------
+""".
 
 -export([
     extract_types/1,
@@ -38,9 +42,13 @@ extract_types(Forms) ->
         Forms
     ).
 
-%% @doc Extract remote type references from a list of type definitions.
-%% Walks the type ASTs and collects {Module, TypeName} pairs for remote_type nodes.
-%% Excludes gm_type references (handled inline by the converter).
+-doc """
+----------------------------------------------------------------------
+Extract remote type references from a list of type definitions.
+Walks the type ASTs and collects {Module, TypeName} pairs for remote_type nodes.
+Excludes gm_type references (handled inline by the converter).
+----------------------------------------------------------------------
+""".
 -spec extract_remote_type_refs([type_def()]) -> [{Module :: atom(), TypeName :: atom()}].
 extract_remote_type_refs(Types) ->
     Refs = lists:foldl(
@@ -56,7 +64,7 @@ extract_remote_type_refs(Types) ->
 %%% Internal Functions
 %%%===================================================================
 
-%% @doc Recursively collect remote type references from an AST node
+-doc false.
 -spec collect_remote_refs(term(), [{atom(), atom()}]) -> [{atom(), atom()}].
 collect_remote_refs({remote_type, _, [{atom, _, gm_type}, {atom, _, _TypeName}, _Args]}, Acc) ->
     %% Skip gm_type refs — handled inline by the converter

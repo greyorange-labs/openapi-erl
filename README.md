@@ -1,16 +1,15 @@
 # rebar3_openapi
 
-A rebar3 plugin that generates **OpenAPI 3.0.x** documentation from Erlang handler modules using the standard `trails` library format.
+A rebar3 plugin that generates **OpenAPI 3.0.x** documentation from Erlang handler modules using the `trails` library format.
 
 ## Features
 
-- ✅ **Standard Compliant**: Uses `trails` library format (compatible with `cowboy_swagger`)
-- ✅ **OpenAPI 3.0.x**: Full compliance with OpenAPI 3.0.3 specification
-- ✅ **Type-Driven**: Define types once, use everywhere (code + documentation)
-- ✅ **Auto-Expansion**: Type references automatically expanded to full `$ref` paths
-- ✅ **Auto-Generated IDs**: Unique `operationId` generated for each route
-- ✅ **No Duplication**: Types stay in code for documentation & type checking
-- ✅ **Shared Library**: Uses `gm_type_schema_converter` for type-to-schema conversion (shared with runtime validation)
+- **Standard Compliant** -- Generates OpenAPI 3.0.3 documents
+- **Trails Integration** -- Uses `trails` library format (compatible with `cowboy_swagger`)
+- **Type-Driven** -- Erlang `-type` definitions drive schema generation
+- **Auto-Expansion** -- Type references automatically expanded to `$ref` paths
+- **Auto-Generated IDs** -- Unique `operationId` generated for each route
+- **Shared Converter** -- Uses [`gm_type_schema_converter`](https://github.com/greyorange-labs/gm_type_schema_converter) for type-to-schema conversion (shared with runtime validation)
 
 ## Installation
 
@@ -25,158 +24,221 @@ Add the plugin to your `rebar.config`:
 ]}.
 ```
 
-**Note:** This plugin requires `yq` CLI tool (v4+) to be installed on your system for YAML output generation. Install from: https://github.com/mikefarah/yq
-
-## Quick Start
-
-For detailed information on how to write handler modules with type definitions and trails, see the [Handler Code Documentation](#handler-code-documentation).
-
-### Generate OpenAPI Documentation
-
-
+**External tool required:** [`yq`](https://github.com/mikefarah/yq) v4+ for YAML output generation.
 
 ## Usage
 
-### Command Line
-
 ```bash
 rebar3 openapi extract \
-  --handler apps/butler_shared/src/interfaces/in/gm_common_http_handler.erl \
+  --handler apps/my_app/src/my_handler.erl \
   --output openapi.yaml \
-  --app butler_shared
+  --app my_app
 ```
 
-**Options:**
-- `--handler` (required): Path to Erlang handler file
-- `--output` (required): Output file path (.yaml or .json)
-- `--app` (required): Application name for metadata
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--handler` | Yes | Path to Erlang handler file(s) |
+| `--output` | Yes | Output file path (`.yaml` or `.json`) |
+| `--app` | Yes | Application name for info metadata |
 
 ## Architecture
 
-### Processing Flow
+### Processing Pipeline
 
 ```
-Handler File (trails/0 + types)
-    ↓
-[Parser] Extract trails + types
-    ↓
-[Expander] Expand type refs → $refs, Generate operationId
-    ↓
-[Schema Converter] Types → OpenAPI schemas (via gm_type_schema_converter)
-    ↓
-[Builder] Assemble OpenAPI 3.0.x document
-    ↓
-[Provider] Convert to JSON, then YAML (via yq CLI)
-    ↓
-OpenAPI YAML/JSON file
+Handler .erl File
+    │
+    ├── [Parser] Extract -type definitions from AST
+    │
+    ├── [Runtime] Call trails/0 to get route metadata
+    │
+    ├── [Expander] Type atoms → $ref paths, generate operationId
+    │
+    ├── [Converter] Erlang type ASTs → OpenAPI JSON schemas
+    │   (via gm_type_schema_converter)
+    │
+    ├── [Builder] Assemble OpenAPI 3.0.3 document
+    │
+    └── [Provider] JSON → YAML (via yq CLI)
+            │
+            ▼
+      openapi.yaml
 ```
 
-### Module Overview
+### Modules
 
-#### Core Modules
+| Module | Responsibility |
+|--------|---------------|
+| `rebar3_openapi` | Plugin entry point -- registers the provider with rebar3 |
+| `rebar3_openapi_prv_extract` | Provider -- orchestrates the full pipeline, handles CLI args, writes output |
+| `rebar3_openapi_parser` | Extracts `-type` definitions and remote type references from Erlang AST |
+| `rebar3_openapi_expander` | Expands type atoms to `$ref` paths, generates `operationId`, handles nullable/array wrappers |
+| `rebar3_openapi_builder` | Builds complete OpenAPI document -- paths, components, info (reads `.app.src` for version/description) |
 
-1. **`rebar3_openapi_parser.erl`**
-   - Extracts `trails/0` callback definitions
-   - Extracts `-type` definitions from AST
-   - Parses Erlang files with includes
+### How Type Expansion Works
 
-2. **`rebar3_openapi_expander.erl`**
-   - Generates unique `operationId` for each operation
-   - Expands type atoms → `$ref` paths
-   - Converts `schema => user_id` → `schema => #{$ref => "#/components/schemas/UserId"}`
+In handler metadata, types are referenced as atoms:
 
-3. **`gm_type_schema_converter`** (Shared Library)
-   - Converts Erlang type AST → OpenAPI JSON Schema
-   - Handles primitives, maps, unions, lists, circular refs
-   - Capitalizes names: `user_id` → `UserId`
-   - Shared with runtime schema validation
+```erlang
+%% In trails/0 metadata
+get => #{
+    parameters => [
+        #{name => <<"id">>, in => <<"path">>, schema => user_id}
+    ],
+    responses => #{
+        <<"200">> => #{
+            content => #{
+                <<"application/json">> => #{schema => user}
+            }
+        }
+    }
+}
+```
 
-4. **`rebar3_openapi_builder.erl`**
-   - Builds complete OpenAPI 3.0.x document structure
-   - Converts paths: `:id` → `{id}` (OpenAPI format)
-   - Assembles paths, components, info sections
+The expander converts these to `$ref` paths:
 
-5. **`rebar3_openapi_prv_extract.erl`**
-   - rebar3 provider that orchestrates the pipeline
-   - Converts map → JSON using `jsx:encode()`
-   - Converts JSON → YAML using `yq` CLI tool
+```yaml
+# After expansion
+parameters:
+  - name: id
+    in: path
+    schema:
+      $ref: '#/components/schemas/UserId'
+responses:
+  '200':
+    content:
+      application/json:
+        schema:
+          $ref: '#/components/schemas/User'
+```
 
-## Examples
+The converter (`gm_type_schema_converter`) then generates the actual schemas from Erlang `-type` definitions:
 
-See `test/fixtures/` for handler examples:
-- `simple_handler.erl` - Basic example
-- `handler_with_types.erl` - Type references example
-- `comprehensive_handler.erl` - Full-featured example with all HTTP methods
+```erlang
+-type user_id() :: binary().
+-type user() :: #{
+    id := user_id(),
+    name := binary(),
+    role := user_role()
+}.
+```
 
-For more detailed handler documentation, see the [Handler Code Documentation](https://github.com/greyorange-labs/PLACEHOLDER_HANDLER_DOCS).
+becomes:
+
+```yaml
+components:
+  schemas:
+    UserId:
+      type: string
+    User:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/UserId'
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+      required: [id, name, role]
+```
+
+### Special Schema Wrappers
+
+The expander supports these wrapper forms in trail metadata:
+
+| Wrapper | Example | Result |
+|---------|---------|--------|
+| Array | `{array, user}` | `{type: array, items: {$ref: ...User}}` |
+| Nullable | `{nullable, user}` | `{oneOf: [{$ref: ...User}, {type: null}]}` |
+| Nullable array | `{nullable, {array, user}}` | `{oneOf: [{type: array, items: ...}, {type: null}]}` |
+
+### YAML Output Strategy
+
+The plugin uses a two-step JSON-then-YAML approach:
+
+1. **JSON**: `jsx:encode()` with ordered proplists for deterministic field ordering
+2. **YAML**: `yq` CLI converts JSON to clean YAML
+
+This avoids YAML quoting issues (especially with `$ref` values) and preserves OpenAPI field ordering.
+
+## Handler Example
+
+```erlang
+-module(my_handler).
+-behaviour(trails_handler).
+-export([trails/0]).
+
+%% Types become schemas
+-type user_id() :: binary().
+-type user() :: #{
+    id := user_id(),
+    name := binary(),
+    active => boolean()  %% => means optional
+}.
+
+trails() ->
+    [trails:trail(
+        <<"/api/users/:id">>,
+        ?MODULE,
+        #{},
+        #{
+            get => #{
+                tags => [<<"Users">>],
+                description => <<"Get user by ID">>,
+                parameters => [
+                    #{name => <<"id">>, in => <<"path">>,
+                      required => true, schema => user_id}
+                ],
+                responses => #{
+                    <<"200">> => #{
+                        description => <<"Success">>,
+                        content => #{
+                            <<"application/json">> => #{schema => user}
+                        }
+                    }
+                }
+            }
+        }
+    )].
+```
+
+See `test/fixtures/` for more examples:
+- `simple_handler.erl` -- Basic handler
+- `handler_with_types.erl` -- Type references
+- `comprehensive_handler.erl` -- All HTTP methods, parameters, request bodies, arrays, enums
 
 ## Dependencies
 
-### Runtime Dependencies
-- **rebar3**: Build tool
-- **trails**: Route definition library
-- **jsx**: JSON encoding library
-- **gm_type_schema_converter**: Shared type-to-schema converter library
+| Dependency | Purpose |
+|-----------|---------|
+| `trails` | Route definition library (cowboy integration) |
+| `jsx` | JSON encoding |
+| `gm_type_schema_converter` | Erlang type AST to OpenAPI JSON Schema |
+| `yq` (external CLI) | JSON to YAML conversion |
 
-### External Tools
-- **yq**: CLI tool (v4+) for JSON to YAML conversion
-  - Install from: https://github.com/mikefarah/yq
-  - Required for YAML output generation
+## Development
 
-## Output Generation
+```bash
+# Compile
+make compile        # or: rebar3 compile
 
-### JSON + yq Approach
+# Run tests (46 tests)
+make test           # or: rebar3 eunit
 
-The plugin uses a two-step process for YAML generation:
+# Format code (erlfmt, 130 char width)
+make format         # or: rebar3 fmt
+make check-format   # or: rebar3 fmt --check
 
-1. **JSON Generation**: Converts OpenAPI document map to ordered proplist and encodes to JSON using `jsx:encode()`
-2. **YAML Conversion**: Uses `yq` CLI tool to convert JSON to YAML
+# Clean
+make clean          # or: rebar3 clean
+```
 
-**Why this approach?**
-- Avoids YAML quoting issues (especially with `$ref` values)
-- Preserves OpenAPI 3.0.3 field ordering (openapi, info, servers, paths, components)
-- Reliable JSON encoding with `jsx` library
-- Clean YAML output via `yq` CLI tool
+### Requirements
 
-## Requirements
-
-- Erlang/OTP 21+
+- Erlang/OTP 27+
 - rebar3
-- `trails` library (for handler format)
-- `yq` CLI tool (v4+) for YAML output
-
-## Testing
-
-Run the test suite:
-
-```bash
-rebar3 eunit
-```
-
-**Test Coverage:**
-- **Unit Tests**: Parser, expander, converter, builder (22 tests)
-- **Integration Tests**: End-to-end flow with real handler files (2 tests)
-- **Total**: 29 tests (all passing)
-
-## Contributing
-
-Contributions welcome! Please ensure all tests pass:
-
-```bash
-rebar3 eunit
-```
-
-## Code Sharing
-
-This plugin uses `gm_type_schema_converter` library for type-to-schema conversion. This shared library:
-- Eliminates code duplication
-- Provides single source of truth for type conversion logic
-- Is also used by runtime schema validation in production applications
+- `yq` v4+ (for YAML output)
 
 ## License
 
-[Add your license here]
-
-## Credits
-
-Inspired by `cowboy_swagger` and built for OpenAPI 3.0.x compliance.
+Copyright (C) 2025, Grey Orange

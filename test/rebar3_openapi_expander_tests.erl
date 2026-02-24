@@ -1,25 +1,17 @@
-%%%===================================================================
-%%% Unit Tests for rebar3_openapi_expander
-%%%===================================================================
-%%% This module contains unit tests for the rebar3_openapi_expander module,
-%%% focusing on expanding type references in trails metadata to OpenAPI 3.0.x $refs.
-%%%===================================================================
-%%%
-%%% Test Progress:
-%%% [✅] Test 1: generate_unique_operation_id_test - PASSED 2025-01-15
-%%% [✅] Test 2: expand_parameter_with_type_ref_test - PASSED 2025-01-15
-%%% [✅] Test 3: expand_request_body_with_type_ref_test - PASSED 2025-01-15
-%%% [✅] Test 4: expand_response_with_type_ref_test - PASSED 2025-01-15
-%%% [✅] Test 5: expand_complete_trail_test - PASSED 2025-01-15
-%%%
-%%% ALL EXPANDER TESTS COMPLETE: 5/5 PASSED ✓
-%%%===================================================================
-
-%%%===================================================================
-%%% Test Cases
-%%%===================================================================
-
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_expander_tests).
+
+-moduledoc """
+----------------------------------------------------------------------
+Unit Tests for rebar3_openapi_expander
+
+Tests expansion of type references in trails metadata to OpenAPI 3.0.x
+$ref paths, operationId generation, and nullable type handling.
+----------------------------------------------------------------------
+""".
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================

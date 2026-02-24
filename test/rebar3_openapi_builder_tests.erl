@@ -1,23 +1,17 @@
-%%%===================================================================
-%%% Unit Tests for rebar3_openapi_builder
-%%%===================================================================
-%%% This module contains unit tests for the rebar3_openapi_builder module,
-%%% focusing on building OpenAPI 3.0.x documents from expanded trails.
-%%%===================================================================
-%%%
-%%% Test Progress:
-%%% [✅] Test 1: build_paths_from_trails_test - PASSED 2025-01-15
-%%% [✅] Test 2: build_components_with_schemas_test - PASSED 2025-01-15
-%%% [✅] Test 3: build_complete_openapi_doc_test - PASSED 2025-01-15
-%%%
-%%% ALL BUILDER TESTS COMPLETE: 3/3 PASSED ✓
-%%%===================================================================
-
-%%%===================================================================
-%%% Test Cases
-%%%===================================================================
-
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_builder_tests).
+
+-moduledoc """
+----------------------------------------------------------------------
+Unit Tests for rebar3_openapi_builder
+
+Tests building complete OpenAPI 3.0.x document structure from expanded
+trails, including paths, components, info sections, and app.src reading.
+----------------------------------------------------------------------
+""".
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================

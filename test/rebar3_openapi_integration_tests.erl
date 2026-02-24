@@ -1,26 +1,17 @@
-%%%===================================================================
-%%% Integration Tests for rebar3_openapi
-%%%===================================================================
-%%% This module contains end-to-end integration tests that test the
-%%% complete flow from handler file to OpenAPI document generation.
-%%%===================================================================
-%%%
-%%% Test Progress:
-%%% [✅] Test 1: simple_handler_end_to_end_test - PASSED 2025-01-15
-%%% [✅] Test 2: comprehensive_handler_end_to_end_test - PASSED 2025-01-15
-%%% [✅] Test 3: generate_complete_openapi_doc_test - PASSED 2025-01-15
-%%%   Tests complete OpenAPI document generation from handler file
-%%%   Verifies paths, operations, request bodies, responses, schemas
-%%% [✅] Test 4: validate_openapi_standard_test - Added 2025-01-XX
-%%%   End-to-end test using comprehensive_handler.erl (all API combinations)
-%%%   Generates OpenAPI YAML and validates with redocly lint
-%%%   Tests: GET, POST, PUT, PATCH, DELETE, path params, query params,
-%%%          request bodies, array/object responses, nested types, enums
-%%%
-%%% ALL INTEGRATION TESTS COMPLETE: 4/4 PASSED ✓
-%%%===================================================================
-
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_integration_tests).
+
+-moduledoc """
+----------------------------------------------------------------------
+Integration Tests for rebar3_openapi
+
+End-to-end tests covering the complete flow from Erlang handler files
+to OpenAPI 3.0.x document generation, including redocly lint validation.
+----------------------------------------------------------------------
+""".
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================

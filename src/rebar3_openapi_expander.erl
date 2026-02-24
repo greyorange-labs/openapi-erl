@@ -1,19 +1,23 @@
+%%%-------------------------------------------------------------------
+%%% @author amarBitMan <https://github.com/amarBitMan>
+%%% @copyright (C) 2025, Grey Orange
+%%%-------------------------------------------------------------------
 -module(rebar3_openapi_expander).
 
-%%%===================================================================
-%%% Metadata Expander for OpenAPI 3.0.x
-%%%===================================================================
-%%%
-%%% This module expands type references in trails metadata to full
-%%% OpenAPI 3.0.x compliant structures with $ref paths.
-%%%
-%%% Key responsibilities:
-%%% 1. Generate unique operationId for each operation
-%%% 2. Expand type references (atoms) to $ref paths
-%%% 3. Ensure OpenAPI 3.0.x structure compliance
-%%% 4. Validate metadata structure
-%%%
-%%%===================================================================
+-moduledoc """
+----------------------------------------------------------------------
+Metadata Expander for OpenAPI 3.0.x
+
+Expands type references in trails metadata to full OpenAPI 3.0.x
+compliant structures with $ref paths.
+
+Key responsibilities:
+1. Generate unique operationId for each operation
+2. Expand type references (atoms) to $ref paths
+3. Ensure OpenAPI 3.0.x structure compliance
+4. Validate metadata structure
+----------------------------------------------------------------------
+""".
 
 -export([
     expand_trails/2,
@@ -54,12 +58,20 @@
 %%% Public API
 %%%===================================================================
 
-%% @doc Expand all trails with type references
+-doc """
+----------------------------------------------------------------------
+Expand all trails with type references
+----------------------------------------------------------------------
+""".
 -spec expand_trails([trail()], [type_def()]) -> [expanded_trail()].
 expand_trails(Trails, Types) ->
     lists:map(fun(Trail) -> expand_trail(Trail, Types) end, Trails).
 
-%% @doc Expand a single trail
+-doc """
+----------------------------------------------------------------------
+Expand a single trail
+----------------------------------------------------------------------
+""".
 -spec expand_trail(trail(), [type_def()]) -> expanded_trail().
 expand_trail(Trail, Types) ->
     %% trails:trail() returns a map with path_match or path key
@@ -77,7 +89,7 @@ expand_trail(Trail, Types) ->
     ExpandedMetadata = expand_metadata(Path, Metadata, Types),
     Trail#{metadata => ExpandedMetadata, path => Path}.
 
-%% @doc Expand metadata for all methods in a trail
+-doc false.
 -spec expand_metadata(binary(), map(), [type_def()]) -> map().
 expand_metadata(Path, Metadata, Types) ->
     maps:map(
@@ -90,7 +102,11 @@ expand_metadata(Path, Metadata, Types) ->
         Metadata
     ).
 
-%% @doc Expand a single operation (method) metadata
+-doc """
+----------------------------------------------------------------------
+Expand a single operation (method) metadata
+----------------------------------------------------------------------
+""".
 -spec expand_operation(binary(), atom(), map(), [type_def()]) -> map().
 expand_operation(Path, Method, OperationMeta, Types) ->
     %% 1. Generate operationId if not present
@@ -126,7 +142,11 @@ expand_operation(Path, Method, OperationMeta, Types) ->
 
     Meta3.
 
-%% @doc Generate unique operationId from path and method
+-doc """
+----------------------------------------------------------------------
+Generate unique operationId from path and method
+----------------------------------------------------------------------
+""".
 -spec generate_operation_id(binary(), atom()) -> binary().
 generate_operation_id(Path, Method) ->
     %% Convert method to string
@@ -139,7 +159,7 @@ generate_operation_id(Path, Method) ->
     %% Combine: methodPath (e.g., "getUserById", "createUser")
     <<MethodBin/binary, CleanPath/binary>>.
 
-%% @doc Clean path for use in operationId
+-doc false.
 -spec clean_path_for_id(binary()) -> binary().
 clean_path_for_id(Path) ->
     %% Split by / and process each segment
@@ -151,7 +171,7 @@ clean_path_for_id(Path) ->
     %% Join all segments
     list_to_binary(ProcessedSegments).
 
-%% @doc Process a single path segment
+-doc false.
 -spec process_path_segment(binary()) -> binary().
 process_path_segment(<<":"/utf8, Rest/binary>>) ->
     %% Path parameter like ":id" -> "ById"
@@ -160,7 +180,7 @@ process_path_segment(Segment) ->
     %% Regular segment - capitalize first letter
     capitalize_first(Segment).
 
-%% @doc Capitalize first letter of a binary
+-doc false.
 -spec capitalize_first(binary()) -> binary().
 capitalize_first(<<>>) ->
     <<>>;
@@ -169,12 +189,16 @@ capitalize_first(<<First:8, Rest/binary>>) when First >= $a, First =< $z ->
 capitalize_first(Bin) ->
     Bin.
 
-%% @doc Expand parameters list
+-doc """
+----------------------------------------------------------------------
+Expand parameters list
+----------------------------------------------------------------------
+""".
 -spec expand_parameters([map()], [type_def()]) -> [map()].
 expand_parameters(Parameters, Types) ->
     lists:map(fun(Param) -> expand_parameter(Param, Types) end, Parameters).
 
-%% @doc Expand a single parameter
+-doc false.
 -spec expand_parameter(map(), [type_def()]) -> map().
 expand_parameter(#{schema := {nullable, TypeRef}} = Param, Types) when is_atom(TypeRef) ->
     %% Nullable type reference -> oneOf: [inner_schema, {type: null}]
@@ -188,7 +212,11 @@ expand_parameter(Param, _Types) ->
     %% No type reference or already expanded
     Param.
 
-%% @doc Expand requestBody
+-doc """
+----------------------------------------------------------------------
+Expand requestBody
+----------------------------------------------------------------------
+""".
 -spec expand_request_body(map(), [type_def()]) -> map().
 expand_request_body(#{content := Content} = ReqBody, Types) ->
     ExpandedContent = maps:map(
@@ -201,7 +229,11 @@ expand_request_body(#{content := Content} = ReqBody, Types) ->
 expand_request_body(ReqBody, _Types) ->
     ReqBody.
 
-%% @doc Expand responses map
+-doc """
+----------------------------------------------------------------------
+Expand responses map
+----------------------------------------------------------------------
+""".
 -spec expand_responses(map(), [type_def()]) -> map().
 expand_responses(Responses, Types) ->
     maps:map(
@@ -211,7 +243,7 @@ expand_responses(Responses, Types) ->
         Responses
     ).
 
-%% @doc Expand a single response
+-doc false.
 -spec expand_response(map(), [type_def()]) -> map().
 expand_response(#{content := Content} = Response, Types) ->
     ExpandedContent = maps:map(
@@ -224,7 +256,7 @@ expand_response(#{content := Content} = Response, Types) ->
 expand_response(Response, _Types) ->
     Response.
 
-%% @doc Expand schema in media type object
+-doc false.
 -spec expand_media_type_schema(map(), [type_def()]) -> map().
 expand_media_type_schema(#{schema := {array, ItemType}} = MediaTypeMeta, Types) when is_atom(ItemType) ->
     %% Array type reference - expand to OpenAPI array schema
@@ -251,14 +283,18 @@ expand_media_type_schema(#{schema := TypeRef} = MediaTypeMeta, Types) when is_at
 expand_media_type_schema(MediaTypeMeta, _Types) ->
     MediaTypeMeta.
 
-%% @doc Convert type atom to OpenAPI $ref path
+-doc """
+----------------------------------------------------------------------
+Convert type atom to OpenAPI $ref path
+----------------------------------------------------------------------
+""".
 -spec type_ref_to_schema_ref(atom()) -> binary().
 type_ref_to_schema_ref(TypeName) ->
     %% Capitalize type name (user_id -> UserId)
     CapitalizedName = gm_type_schema_converter:capitalize_type_name(TypeName),
     <<"#/components/schemas/", CapitalizedName/binary>>.
 
-%% @doc Resolve a type atom to an inline schema or $ref
+-doc false.
 -spec resolve_type_to_schema(atom(), [type_def()]) -> map().
 resolve_type_to_schema(TypeRef, _Types) ->
     case is_primitive_type(TypeRef) of
@@ -269,7 +305,7 @@ resolve_type_to_schema(TypeRef, _Types) ->
             #{<<"$ref">> => SchemaRef}
     end.
 
-%% @doc Check if an atom is a primitive Erlang type
+-doc false.
 -spec is_primitive_type(atom()) -> boolean().
 is_primitive_type(binary) -> true;
 is_primitive_type(integer) -> true;
@@ -293,7 +329,7 @@ is_primitive_type(Float) when Float =:= <<"float">> -> true;
 is_primitive_type(Boolean) when Boolean =:= <<"boolean">> -> true;
 is_primitive_type(_) -> false.
 
-%% @doc Convert primitive type atom to OpenAPI inline schema
+-doc false.
 -spec primitive_type_to_schema(atom()) -> map().
 primitive_type_to_schema(binary) ->
     #{<<"type">> => <<"string">>};
@@ -320,10 +356,12 @@ primitive_type_to_schema(term) ->
 primitive_type_to_schema(any) ->
     #{};
 primitive_type_to_schema(timeout) ->
-    #{<<"oneOf">> => [
-        #{<<"type">> => <<"integer">>, <<"minimum">> => 0},
-        #{<<"type">> => <<"string">>, <<"enum">> => [<<"infinity">>]}
-    ]};
+    #{
+        <<"oneOf">> => [
+            #{<<"type">> => <<"integer">>, <<"minimum">> => 0},
+            #{<<"type">> => <<"string">>, <<"enum">> => [<<"infinity">>]}
+        ]
+    };
 primitive_type_to_schema(byte) ->
     #{<<"type">> => <<"integer">>, <<"minimum">> => 0, <<"maximum">> => 255};
 primitive_type_to_schema(char) ->
