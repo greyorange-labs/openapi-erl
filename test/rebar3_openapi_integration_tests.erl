@@ -9,7 +9,8 @@
 Integration Tests for rebar3_openapi
 
 End-to-end tests covering the complete flow from Erlang handler files
-to OpenAPI 3.0.x document generation, including redocly lint validation.
+to OpenAPI 3.0.x document generation, including -type_meta metadata
+merging and redocly lint validation.
 ----------------------------------------------------------------------
 """.
 -include_lib("eunit/include/eunit.hrl").
@@ -412,6 +413,82 @@ validate_openapi_standard_test() ->
     end,
     %% Teardown: Clean up generated file
     file:delete(OutputYamlFile).
+
+%%%===================================================================
+%%% Test 5: End-to-end with -type_meta metadata
+%%%===================================================================
+
+%% Test 5: -type_meta attributes are extracted and merged into OpenAPI schemas
+type_meta_end_to_end_test() ->
+    FixturePath = "test/fixtures/handler_with_type_meta.erl",
+    ModuleName = handler_with_type_meta,
+
+    %% Step 1: Parse handler for types AND type_meta
+    IncludePaths = [{includes, []}, {macros, []}],
+    {ok, Forms} = epp:parse_file(FixturePath, IncludePaths),
+    Types = rebar3_openapi_parser:extract_types(Forms),
+    TypeMeta = rebar3_openapi_parser:extract_type_meta(Forms),
+
+    %% Verify type_meta was extracted
+    ?assertEqual(3, maps:size(TypeMeta), "Should extract 3 type_meta entries"),
+    ?assert(maps:is_key(user_id, TypeMeta)),
+    ?assert(maps:is_key(user, TypeMeta)),
+    ?assert(maps:is_key(user_role, TypeMeta)),
+
+    %% Step 2: Compile and call trails()
+    {ok, Trails} = compile_and_call_trails(FixturePath, ModuleName),
+    ?assert(length(Trails) > 0, "Should extract trails"),
+
+    %% Step 3: Expand trails metadata
+    ExpandedTrails = rebar3_openapi_expander:expand_trails(Trails, Types),
+
+    %% Step 4: Build OpenAPI document WITH type_meta (using /6 arity)
+    AppName = <<"TypeMetaTestAPI">>,
+    OpenAPIDoc = rebar3_openapi_builder:build_from_trails(
+        ExpandedTrails, Types, AppName, undefined, undefined, TypeMeta
+    ),
+
+    %% Verify document structure
+    ?assertEqual(<<"3.0.3">>, maps:get(<<"openapi">>, OpenAPIDoc)),
+
+    %% Get schemas
+    Components = maps:get(<<"components">>, OpenAPIDoc),
+    Schemas = maps:get(<<"schemas">>, Components),
+
+    %% Verify UserId has description and example from -type_meta
+    ?assert(maps:is_key(<<"UserId">>, Schemas), "Should have UserId schema"),
+    UserIdSchema = maps:get(<<"UserId">>, Schemas),
+    ?assertEqual(<<"string">>, maps:get(<<"type">>, UserIdSchema)),
+    ?assertEqual(<<"Unique user identifier">>, maps:get(<<"description">>, UserIdSchema)),
+    ?assertEqual(<<"usr_abc123">>, maps:get(<<"example">>, UserIdSchema)),
+
+    %% Verify User has description from -type_meta
+    ?assert(maps:is_key(<<"User">>, Schemas), "Should have User schema"),
+    UserSchema = maps:get(<<"User">>, Schemas),
+    ?assertEqual(<<"object">>, maps:get(<<"type">>, UserSchema)),
+    ?assertEqual(<<"A user in the system">>, maps:get(<<"description">>, UserSchema)),
+
+    %% Verify UserRole has description and deprecated from -type_meta
+    ?assert(maps:is_key(<<"UserRole">>, Schemas), "Should have UserRole schema"),
+    UserRoleSchema = maps:get(<<"UserRole">>, Schemas),
+    ?assertEqual(<<"Role assigned to a user">>, maps:get(<<"description">>, UserRoleSchema)),
+    ?assertEqual(true, maps:get(<<"deprecated">>, UserRoleSchema)),
+
+    %% Verify ErrorResponse does NOT have description (no -type_meta for it)
+    ?assert(maps:is_key(<<"ErrorResponse">>, Schemas), "Should have ErrorResponse schema"),
+    ErrorSchema = maps:get(<<"ErrorResponse">>, Schemas),
+    ?assertEqual(error, maps:find(<<"description">>, ErrorSchema)),
+
+    %% Step 5: Also build WITHOUT type_meta (using /5 arity) for comparison
+    DocWithout = rebar3_openapi_builder:build_from_trails(
+        ExpandedTrails, Types, AppName, undefined, undefined
+    ),
+    SchemasWithout = maps:get(<<"schemas">>, maps:get(<<"components">>, DocWithout)),
+    UserIdWithout = maps:get(<<"UserId">>, SchemasWithout),
+    %% Without type_meta, UserId should NOT have description
+    ?assertEqual(error, maps:find(<<"description">>, UserIdWithout)),
+
+    ?assert(true, "type_meta end-to-end test passed").
 
 %% Helper function to compile handler module and call trails()
 -spec compile_and_call_trails(string(), atom()) -> {ok, [term()]} | {error, term()}.

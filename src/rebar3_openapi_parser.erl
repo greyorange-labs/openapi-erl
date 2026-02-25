@@ -16,6 +16,7 @@ Used by the plugin for OpenAPI 3.0.x documentation generation.
 
 -export([
     extract_types/1,
+    extract_type_meta/1,
     extract_remote_type_refs/1
 ]).
 
@@ -39,6 +40,35 @@ extract_types(Forms) ->
             end
         end,
         [],
+        Forms
+    ).
+
+-doc """
+----------------------------------------------------------------------
+Extract -type_meta attributes from parsed forms.
+Returns a map of TypeName => MetadataMap.
+
+Usage in handler modules:
+  -type_meta({type_name, #{description => <<"Human-readable description">>}}).
+
+Supported metadata keys: description, title, example, default,
+deprecated (boolean), read_only (boolean), write_only (boolean).
+----------------------------------------------------------------------
+""".
+-spec extract_type_meta([erl_parse:abstract_form()]) -> #{atom() => map()}.
+extract_type_meta(Forms) ->
+    lists:foldl(
+        fun(Form, Acc) ->
+            case Form of
+                {attribute, _Line, type_meta, {TypeName, MetadataMap}} when
+                    is_atom(TypeName), is_map(MetadataMap)
+                ->
+                    Acc#{TypeName => MetadataMap};
+                _ ->
+                    Acc
+            end
+        end,
+        #{},
         Forms
     ).
 

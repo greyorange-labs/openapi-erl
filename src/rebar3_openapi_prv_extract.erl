@@ -133,6 +133,7 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
             case parse_forms(HandlerPath, IncludePaths) of
                 {ok, Forms} ->
                     LocalTypes = rebar3_openapi_parser:extract_types(Forms),
+                    TypeMeta = rebar3_openapi_parser:extract_type_meta(Forms),
 
                     %% Resolve remote type references from other modules
                     Types = resolve_remote_types(LocalTypes, IncludePaths, State),
@@ -157,7 +158,7 @@ extract_and_generate(State, HandlerPath, OutputPath, AppName) ->
                             %% Build OpenAPI document from expanded trails
                             AppNameBin = list_to_binary(AppName),
                             OpenAPIDoc = rebar3_openapi_builder:build_from_trails(
-                                ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot
+                                ExpandedTrails, Types, AppNameBin, AppSrcPath, WorkspaceRoot, TypeMeta
                             ),
 
                             %% Write to file

@@ -360,3 +360,127 @@ build_paths_external_docs_operation_test() ->
     GetOp = maps:get(<<"get">>, maps:get(<<"/api/docs">>, Paths)),
     ExternalDocs = maps:get(<<"externalDocs">>, GetOp),
     ?assertEqual(<<"More info">>, maps:get(<<"description">>, ExternalDocs)).
+
+%%%===================================================================
+%%% Test 8-12: -type_meta merging into components
+%%%===================================================================
+
+%% Test 8: build_components/2 merges type_meta descriptions into schemas
+build_components_with_type_meta_test() ->
+    Types = [
+        {user_id, {type, 1, binary, []}},
+        {user_role, {type, 1, union, [{atom, 1, admin}, {atom, 1, viewer}]}}
+    ],
+    TypeMeta = #{
+        user_id => #{description => <<"Unique user identifier">>, example => <<"usr_123">>},
+        user_role => #{description => <<"Role assigned to a user">>, deprecated => true}
+    },
+
+    Components = rebar3_openapi_builder:build_components(Types, TypeMeta),
+    Schemas = maps:get(<<"schemas">>, Components),
+
+    %% UserId schema should have description and example
+    UserIdSchema = maps:get(<<"UserId">>, Schemas),
+    ?assertEqual(<<"string">>, maps:get(<<"type">>, UserIdSchema)),
+    ?assertEqual(<<"Unique user identifier">>, maps:get(<<"description">>, UserIdSchema)),
+    ?assertEqual(<<"usr_123">>, maps:get(<<"example">>, UserIdSchema)),
+
+    %% UserRole schema should have description and deprecated
+    UserRoleSchema = maps:get(<<"UserRole">>, Schemas),
+    ?assertEqual(<<"Role assigned to a user">>, maps:get(<<"description">>, UserRoleSchema)),
+    ?assertEqual(true, maps:get(<<"deprecated">>, UserRoleSchema)).
+
+%% Test 9: Empty type_meta should not change schemas
+build_components_empty_type_meta_test() ->
+    Types = [
+        {user_id, {type, 1, binary, []}}
+    ],
+
+    %% With empty TypeMeta
+    Components = rebar3_openapi_builder:build_components(Types, #{}),
+    Schemas = maps:get(<<"schemas">>, Components),
+    UserIdSchema = maps:get(<<"UserId">>, Schemas),
+
+    %% Should have type but no description
+    ?assertEqual(<<"string">>, maps:get(<<"type">>, UserIdSchema)),
+    ?assertEqual(error, maps:find(<<"description">>, UserIdSchema)).
+
+%% Test 10: type_meta for non-existent type is silently ignored
+build_components_type_meta_nonexistent_type_test() ->
+    Types = [
+        {user_id, {type, 1, binary, []}}
+    ],
+    TypeMeta = #{
+        nonexistent_type => #{description => <<"Should be ignored">>}
+    },
+
+    Components = rebar3_openapi_builder:build_components(Types, TypeMeta),
+    Schemas = maps:get(<<"schemas">>, Components),
+
+    %% Only UserId should exist, no NonexistentType
+    ?assertEqual(1, maps:size(Schemas)),
+    ?assert(maps:is_key(<<"UserId">>, Schemas)),
+    %% UserId should NOT have the description (it was for nonexistent_type)
+    ?assertEqual(error, maps:find(<<"description">>, maps:get(<<"UserId">>, Schemas))).
+
+%% Test 11: build_from_trails/6 passes type_meta through to components
+build_from_trails_with_type_meta_test() ->
+    Trails = [
+        #{
+            path => <<"/api/test">>,
+            handler => test_handler,
+            options => #{},
+            metadata => #{
+                get => #{
+                    operationId => <<"getTest">>,
+                    tags => [<<"test">>],
+                    responses => #{
+                        <<"200">> => #{description => <<"Success">>}
+                    }
+                }
+            }
+        }
+    ],
+    Types = [
+        {my_type, {type, 1, binary, []}}
+    ],
+    TypeMeta = #{
+        my_type => #{description => <<"A test type">>, title => <<"MyType Title">>}
+    },
+
+    Doc = rebar3_openapi_builder:build_from_trails(Trails, Types, <<"TestApp">>, undefined, undefined, TypeMeta),
+
+    %% Check components have the merged metadata
+    Components = maps:get(<<"components">>, Doc),
+    Schemas = maps:get(<<"schemas">>, Components),
+    MyTypeSchema = maps:get(<<"MyType">>, Schemas),
+    ?assertEqual(<<"A test type">>, maps:get(<<"description">>, MyTypeSchema)),
+    ?assertEqual(<<"MyType Title">>, maps:get(<<"title">>, MyTypeSchema)).
+
+%% Test 12: All supported metadata keys are applied correctly
+build_components_all_metadata_keys_test() ->
+    Types = [
+        {config_type, {type, 1, binary, []}}
+    ],
+    TypeMeta = #{
+        config_type => #{
+            description => <<"A configuration value">>,
+            title => <<"Config">>,
+            example => <<"my-config">>,
+            default => <<"default-val">>,
+            deprecated => true,
+            read_only => true,
+            write_only => false
+        }
+    },
+
+    Components = rebar3_openapi_builder:build_components(Types, TypeMeta),
+    Schema = maps:get(<<"ConfigType">>, maps:get(<<"schemas">>, Components)),
+
+    ?assertEqual(<<"A configuration value">>, maps:get(<<"description">>, Schema)),
+    ?assertEqual(<<"Config">>, maps:get(<<"title">>, Schema)),
+    ?assertEqual(<<"my-config">>, maps:get(<<"example">>, Schema)),
+    ?assertEqual(<<"default-val">>, maps:get(<<"default">>, Schema)),
+    ?assertEqual(true, maps:get(<<"deprecated">>, Schema)),
+    ?assertEqual(true, maps:get(<<"readOnly">>, Schema)),
+    ?assertEqual(false, maps:get(<<"writeOnly">>, Schema)).
