@@ -8,8 +8,8 @@
 ----------------------------------------------------------------------
 Unit Tests for rebar3_openapi_parser
 
-Tests extraction of -type definitions and remote type references
-from Erlang handler source files.
+Tests extraction of -type definitions, -type_meta attributes,
+and remote type references from Erlang handler source files.
 ----------------------------------------------------------------------
 """.
 -include_lib("eunit/include/eunit.hrl").
@@ -104,3 +104,84 @@ extract_remote_type_refs_in_union_test() ->
     ],
     Refs = rebar3_openapi_parser:extract_remote_type_refs(Types),
     ?assertEqual([{mod_a, type_a}, {mod_b, type_b}], Refs).
+
+%%%===================================================================
+%%% Test: Extract -type_meta attributes from parsed forms
+%%%===================================================================
+
+extract_type_meta_empty_test() ->
+    %% No type_meta attributes → empty map
+    Forms = [
+        {attribute, 1, module, my_module},
+        {attribute, 2, type, {user_id, {type, 2, binary, []}, []}}
+    ],
+    Result = rebar3_openapi_parser:extract_type_meta(Forms),
+    ?assertEqual(#{}, Result).
+
+extract_type_meta_single_test() ->
+    %% Single -type_meta with description
+    Forms = [
+        {attribute, 1, module, my_module},
+        {attribute, 2, type_meta, {user_id, #{description => <<"Unique user identifier">>}}},
+        {attribute, 3, type, {user_id, {type, 3, binary, []}, []}}
+    ],
+    Result = rebar3_openapi_parser:extract_type_meta(Forms),
+    ?assertEqual(#{user_id => #{description => <<"Unique user identifier">>}}, Result).
+
+extract_type_meta_multiple_test() ->
+    %% Multiple -type_meta attributes
+    Forms = [
+        {attribute, 1, module, my_module},
+        {attribute, 2, type_meta, {user_id, #{description => <<"User ID">>, example => <<"usr_123">>}}},
+        {attribute, 3, type, {user_id, {type, 3, binary, []}, []}},
+        {attribute, 4, type_meta, {user_role, #{description => <<"Role">>, deprecated => true}}},
+        {attribute, 5, type, {user_role, {type, 5, union, [{atom, 5, admin}, {atom, 5, user}]}, []}}
+    ],
+    Result = rebar3_openapi_parser:extract_type_meta(Forms),
+    ?assertEqual(2, maps:size(Result)),
+    ?assertEqual(#{description => <<"User ID">>, example => <<"usr_123">>}, maps:get(user_id, Result)),
+    ?assertEqual(#{description => <<"Role">>, deprecated => true}, maps:get(user_role, Result)).
+
+extract_type_meta_ignores_invalid_test() ->
+    %% Non-matching forms should be ignored
+    Forms = [
+        {attribute, 1, module, my_module},
+        %% Invalid: not a {TypeName, Map} tuple
+        {attribute, 2, type_meta, just_an_atom},
+        %% Invalid: metadata is not a map
+        {attribute, 3, type_meta, {some_type, not_a_map}},
+        %% Valid
+        {attribute, 4, type_meta, {valid_type, #{description => <<"Valid">>}}}
+    ],
+    Result = rebar3_openapi_parser:extract_type_meta(Forms),
+    ?assertEqual(1, maps:size(Result)),
+    ?assertEqual(#{description => <<"Valid">>}, maps:get(valid_type, Result)).
+
+extract_type_meta_from_handler_test() ->
+    %% Parse actual fixture file with -type_meta attributes
+    FixturePath = "test/fixtures/handler_with_type_meta.erl",
+    {ok, Forms} = epp:parse_file(FixturePath, [{includes, []}, {macros, []}]),
+    TypeMeta = rebar3_openapi_parser:extract_type_meta(Forms),
+
+    %% Should extract 3 type_meta entries (user_id, user, user_role)
+    ?assertEqual(3, maps:size(TypeMeta)),
+
+    %% Check user_id metadata
+    ?assert(maps:is_key(user_id, TypeMeta)),
+    UserIdMeta = maps:get(user_id, TypeMeta),
+    ?assertEqual(<<"Unique user identifier">>, maps:get(description, UserIdMeta)),
+    ?assertEqual(<<"usr_abc123">>, maps:get(example, UserIdMeta)),
+
+    %% Check user metadata
+    ?assert(maps:is_key(user, TypeMeta)),
+    UserMeta = maps:get(user, TypeMeta),
+    ?assertEqual(<<"A user in the system">>, maps:get(description, UserMeta)),
+
+    %% Check user_role metadata (deprecated)
+    ?assert(maps:is_key(user_role, TypeMeta)),
+    RoleMeta = maps:get(user_role, TypeMeta),
+    ?assertEqual(<<"Role assigned to a user">>, maps:get(description, RoleMeta)),
+    ?assertEqual(true, maps:get(deprecated, RoleMeta)),
+
+    %% error_response has no -type_meta, should NOT be in the map
+    ?assertNot(maps:is_key(error_response, TypeMeta)).
