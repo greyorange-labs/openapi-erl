@@ -17,8 +17,10 @@ Assembles paths, components, info sections from expanded trail data.
     build/3,
     build_from_trails/4,
     build_from_trails/5,
+    build_from_trails/6,
     build_paths_from_trails/1,
     build_components/1,
+    build_components/2,
     build_info/3
 ]).
 
@@ -44,12 +46,23 @@ build_from_trails(Trails, Types, AppName, AppSrcPath) ->
     WorkspaceRoot :: string() | undefined
 ) -> map().
 build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot) ->
+    build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot, #{}).
+
+-spec build_from_trails(
+    [expanded_trail()],
+    [type_def()],
+    AppName :: atom() | binary(),
+    AppSrcPath :: string() | undefined,
+    WorkspaceRoot :: string() | undefined,
+    TypeMeta :: #{atom() => map()}
+) -> map().
+build_from_trails(Trails, Types, AppName, AppSrcPath, WorkspaceRoot, TypeMeta) ->
     #{
         <<"openapi">> => <<"3.0.3">>,
         <<"info">> => build_info(AppName, AppSrcPath, WorkspaceRoot),
         <<"servers">> => build_servers(),
         <<"paths">> => build_paths_from_trails(Trails),
-        <<"components">> => build_components(Types),
+        <<"components">> => build_components(Types, TypeMeta),
         % Empty array indicates no security required (satisfies security-defined rule)
         <<"security">> => []
     }.
@@ -364,8 +377,19 @@ Build components section with schemas
 """.
 -spec build_components([type_def()]) -> map().
 build_components(Types) ->
+    build_components(Types, #{}).
+
+-doc """
+----------------------------------------------------------------------
+Build components section with schemas, merging -type_meta metadata.
+----------------------------------------------------------------------
+""".
+-spec build_components([type_def()], #{atom() => map()}) -> map().
+build_components(Types, TypeMeta) ->
     %% Convert type definitions to OpenAPI schemas
-    Schemas = extract_schemas(Types),
+    Schemas0 = extract_schemas(Types),
+    %% Merge -type_meta metadata into schemas
+    Schemas = merge_type_meta(Schemas0, TypeMeta),
     #{
         <<"schemas">> => Schemas
     }.
@@ -374,6 +398,46 @@ build_components(Types) ->
 extract_schemas(Types) ->
     %% Use shared type converter library to transform Erlang types to OpenAPI schemas
     gm_type_schema_converter:types_to_schemas(Types).
+
+-spec merge_type_meta(#{binary() => map()}, #{atom() => map()}) -> #{binary() => map()}.
+merge_type_meta(SchemaMap, TypeMeta) when map_size(TypeMeta) =:= 0 ->
+    SchemaMap;
+merge_type_meta(SchemaMap, TypeMeta) ->
+    maps:fold(
+        fun(TypeName, Metadata, Acc) ->
+            SchemaName = gm_type_schema_converter:capitalize_type_name(TypeName),
+            case maps:get(SchemaName, Acc, undefined) of
+                undefined ->
+                    Acc;
+                Schema ->
+                    Acc#{SchemaName => apply_metadata(Schema, Metadata)}
+            end
+        end,
+        SchemaMap,
+        TypeMeta
+    ).
+
+-spec apply_metadata(map(), map()) -> map().
+apply_metadata(Schema, Metadata) ->
+    maps:fold(
+        fun
+            (description, V, Acc) -> Acc#{<<"description">> => ensure_binary(V)};
+            (title, V, Acc) -> Acc#{<<"title">> => ensure_binary(V)};
+            (example, V, Acc) -> Acc#{<<"example">> => V};
+            (default, V, Acc) -> Acc#{<<"default">> => V};
+            (deprecated, V, Acc) when is_boolean(V) -> Acc#{<<"deprecated">> => V};
+            (read_only, V, Acc) when is_boolean(V) -> Acc#{<<"readOnly">> => V};
+            (write_only, V, Acc) when is_boolean(V) -> Acc#{<<"writeOnly">> => V};
+            (_, _, Acc) -> Acc
+        end,
+        Schema,
+        Metadata
+    ).
+
+-spec ensure_binary(term()) -> binary().
+ensure_binary(V) when is_binary(V) -> V;
+ensure_binary(V) when is_list(V) -> list_to_binary(V);
+ensure_binary(V) when is_atom(V) -> atom_to_binary(V, utf8).
 
 -spec method_to_lowercase(binary() | list()) -> binary().
 method_to_lowercase(Method) when is_binary(Method) ->
